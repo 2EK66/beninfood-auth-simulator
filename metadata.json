@@ -1,0 +1,6 @@
+{
+  "name": "BeninFood Auth Simulator",
+  "description": "Générateur et simulateur interactif d'écrans d'authentification Expo (React Native) avec NativeWind pour l'application BeninFood.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
