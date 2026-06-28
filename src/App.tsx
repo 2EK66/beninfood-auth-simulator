@@ -186,14 +186,22 @@ export default function App() {
     }
   };
 
-  // 5. Function to simulate submitting from the phone
+  // 5. Authentification réelle via Supabase (serveur)
   const handleSimulateAuthSubmit = async (action: "login" | "register", data: any) => {
-    const response = await fetch("/api/mock-auth", {
+    const response = await fetch("/api/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
+      body: JSON.stringify({ ...data, action }),
     });
-    return await response.json();
+    const result = await response.json();
+    // Sauvegarder la session Supabase si connexion réussie
+    if (result.success && result.data?.session?.access_token) {
+      localStorage.setItem(
+        "bf_supabase_session",
+        JSON.stringify(result.data.session)
+      );
+    }
+    return result;
   };
 
   return (
