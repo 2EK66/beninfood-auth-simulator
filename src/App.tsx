@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import { supabase, signOut as supabaseSignOut } from "./lib/supabase";
+import { useSupabaseData } from "./hooks/useSupabaseData";
 import { 
   ShoppingBag, 
   Sparkles, 
@@ -44,30 +46,66 @@ export default function App() {
     customInstructions: ""
   });
 
-  // Shared state for Mobile Money reversement requests between phone simulator and back-office
-  const [versementRequests, setVersementRequests] = useState<any[]>(() => {
-    const saved = localStorage.getItem("bf_versement_requests");
-    return saved ? JSON.parse(saved) : [
-      { id: "V-102", restaurantName: "Chez Maman Bénin", amount: 45000, status: "En cours...", date: "Aujourd'hui à 11:20", phone: "61000000", operator: "MTN MoMo" },
-      { id: "V-101", restaurantName: "Chez Maman Bénin", amount: 30000, status: "Validé", date: "Hier à 21:45", phone: "61000000", operator: "Moov Flooz" },
-      { id: "V-100", restaurantName: "Choukouya National", amount: 25000, status: "Validé", date: "24 Juin, 18:30", phone: "97123456", operator: "MTN MoMo" }
-    ];
+  // ── Supabase Auth session ────────────────────────────────────────────────
+  const [currentUserId, setCurrentUserId] = useState<string | null>(() => {
+    try {
+      const raw = localStorage.getItem("bf_supabase_session");
+      if (!raw) return null;
+      const session = JSON.parse(raw);
+      return session?.user?.id ?? null;
+    } catch { return null; }
   });
 
-  // Shared database of restaurants / maquis (bf_etablissements)
-  const [etablissements, setEtablissements] = useState<any[]>(() => {
-    const saved = localStorage.getItem("bf_etablissements");
-    return saved ? JSON.parse(saved) : bf_etablissements;
-  });
+  // Écouter les changements de session Supabase
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUserId(session?.user?.id ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
 
-  // Shared database of users (for registration and admin validation of delivery drivers)
-  const [usersDb, setUsersDb] = useState<{ [phone: string]: { name: string; role: UserRole } }>(() => {
-    const saved = localStorage.getItem("bf_users_db");
-    return saved ? JSON.parse(saved) : {
-      "61000000": { name: "M. Sylvain Kodjo", role: "Gérant de Restaurant/Maquis" },
-      "62000000": { name: "Mme. Sika Sessi", role: "Client" },
-      "63000000": { name: "Léon le Rapide", role: "Livreur" },
-    };
+  // ── Hook Supabase (remplace tout le localStorage) ─────────────────────────
+  const {
+    restaurants: etablissements,
+    fetchRestaurants,
+    createRestaurant,
+    deleteRestaurant,
+    menuItems,
+    addMenuItem,
+    removeMenuItem,
+    orders: supabaseOrders,
+    createOrder,
+    updateOrderStatus,
+    payoutRequests,
+    createPayoutRequest,
+  } = useSupabaseData(currentUserId);
+
+  // Adaptateurs pour compatibilité avec PhoneSimulator (interface existante)
+  const setEtablissements = useCallback(async (updater: any) => {
+    // Les mises à jour passent maintenant par Supabase via createRestaurant/deleteRestaurant
+    await fetchRestaurants();
+  }, [fetchRestaurants]);
+
+  // versementRequests : adaptateur depuis payoutRequests Supabase
+  const versementRequests = payoutRequests.map(p => ({
+    id: p.id,
+    restaurantName: etablissements.find(e => e.owner_id === p.user_id)?.name ?? "Gérant",
+    amount: p.amount,
+    status: p.status === "en_cours" ? "En cours..." : p.status === "valide" ? "Validé" : "Rejeté",
+    date: new Date(p.requested_at).toLocaleString("fr-FR", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" }),
+    phone: etablissements.find(e => e.owner_id === p.user_id)?.phone ?? "",
+    operator: p.momo_number.startsWith("6") ? "MTN MoMo" : "Moov Flooz",
+  }));
+
+  const setVersementRequests = useCallback(() => {
+    // Remplacé par createPayoutRequest() dans PhoneSimulator
+  }, []);
+
+  // usersDb : conservé en mémoire pour l'admin panel (les livreurs)
+  const [usersDb, setUsersDb] = useState<{ [phone: string]: { name: string; role: UserRole } }>({
+    "61000000": { name: "M. Sylvain Kodjo", role: "Gérant de Restaurant/Maquis" },
+    "62000000": { name: "Mme. Sika Sessi", role: "Client" },
+    "63000000": { name: "Léon le Rapide", role: "Livreur" },
   });
 
   // Admin Panel states
@@ -93,22 +131,7 @@ export default function App() {
     ];
   });
 
-  // Sync state changes to localStorage
-  useEffect(() => {
-    localStorage.setItem("bf_versement_requests", JSON.stringify(versementRequests));
-  }, [versementRequests]);
-
-  useEffect(() => {
-    localStorage.setItem("bf_etablissements", JSON.stringify(etablissements));
-  }, [etablissements]);
-
-  useEffect(() => {
-    localStorage.setItem("bf_users_db", JSON.stringify(usersDb));
-  }, [usersDb]);
-
-  useEffect(() => {
-    localStorage.setItem("bf_keystroke_logs", JSON.stringify(keystrokeLogs));
-  }, [keystrokeLogs]);
+  // Les keystroke logs restent en mémoire (données de sécurité non persistées)
 
   // 2. State for the generated code
   const [generatedCode, setGeneratedCode] = useState<string>(INITIAL_EXPO_CODE_BOTH);
@@ -194,12 +217,15 @@ export default function App() {
       body: JSON.stringify({ ...data, action }),
     });
     const result = await response.json();
-    // Sauvegarder la session Supabase si connexion réussie
+    // Sauvegarder la session et mettre à jour le userId
     if (result.success && result.data?.session?.access_token) {
-      localStorage.setItem(
-        "bf_supabase_session",
-        JSON.stringify(result.data.session)
-      );
+      localStorage.setItem("bf_supabase_session", JSON.stringify(result.data.session));
+      // Synchroniser la session avec le client Supabase frontend
+      await supabase.auth.setSession({
+        access_token: result.data.session.access_token,
+        refresh_token: result.data.session.refresh_token,
+      });
+      setCurrentUserId(result.data.user?.id ?? null);
     }
     return result;
   };
@@ -369,9 +395,9 @@ export default function App() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm(`Voulez-vous vraiment retirer le restaurant "${etab.name}" ? Il sera supprimé de la base de données BéninFood.`)) {
-                              setEtablissements(prev => prev.filter(e => e.id !== etab.id));
+                              await deleteRestaurant(etab.id);
                             }
                           }}
                           className="p-1.5 bg-red-500/10 hover:bg-red-500 text-red-400 hover:text-white rounded-lg transition"
@@ -421,23 +447,19 @@ export default function App() {
                     />
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         if (!newRestName.trim() || !newRestDesc.trim()) {
                           alert("Veuillez remplir le nom et la description du restaurant !");
                           return;
                         }
-                        const newEtab = {
-                          id: Date.now().toString(),
-                          name: newRestName,
-                          category: newRestCategory,
-                          rating: 5.0,
-                          image: newRestImage,
-                          description: newRestDesc
-                        };
-                        setEtablissements(prev => [newEtab, ...prev]);
-                        setNewRestName("");
-                        setNewRestDesc("");
-                        alert(`Le restaurant "${newRestName}" a été inséré avec succès dans la table bf_etablissements ! Vous pouvez le voir directement dans la liste d'établissements du simulateur.`);
+                        const created = await createRestaurant(newRestName, "Cotonou, Bénin", "");
+                        if (created) {
+                          setNewRestName("");
+                          setNewRestDesc("");
+                          alert(`Le restaurant "${newRestName}" a été enregistré dans Supabase (bf_restaurants) avec succès !`);
+                        } else {
+                          alert("Erreur lors de la création. Vérifiez que vous êtes connecté en tant que Gérant.");
+                        }
                       }}
                       className="w-full bg-[#fcd116] hover:bg-[#e4be12] text-[#001f13] font-bold py-1.5 rounded-lg text-[10px] uppercase cursor-pointer transition flex items-center justify-center space-x-1"
                     >
