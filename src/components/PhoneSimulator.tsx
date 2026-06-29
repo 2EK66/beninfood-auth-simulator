@@ -202,14 +202,49 @@ export default function PhoneSimulator({
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [alertMessage, setAlertMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [session, setSession] = useState<AuthState>(() => {
-    const saved = localStorage.getItem("bf_mobile_session");
-    return saved ? JSON.parse(saved) : { isLoggedIn: false, user: null };
-  });
+  const [session, setSession] = useState<AuthState>({ isLoggedIn: false, user: null });
 
+  // Écouter les changements de session Supabase Auth
   useEffect(() => {
-    localStorage.setItem("bf_mobile_session", JSON.stringify(session));
-  }, [session]);
+    // Vérifier la session active au montage
+    import("../lib/supabase").then(({ supabase }) => {
+      supabase.auth.getSession().then(({ data: { session: s } }) => {
+        if (s?.user) {
+          const meta = s.user.user_metadata;
+          setSession({
+            isLoggedIn: true,
+            user: {
+              id: s.user.id,
+              name: meta?.full_name ?? "Utilisateur",
+              phone: meta?.phone ?? "",
+              role: (meta?.role ?? "Client") as UserRole,
+            },
+            token: s.access_token,
+          });
+        }
+      });
+
+      // Écouter les changements en temps réel
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, s) => {
+        if (s?.user) {
+          const meta = s.user.user_metadata;
+          setSession({
+            isLoggedIn: true,
+            user: {
+              id: s.user.id,
+              name: meta?.full_name ?? "Utilisateur",
+              phone: meta?.phone ?? "",
+              role: (meta?.role ?? "Client") as UserRole,
+            },
+            token: s.access_token,
+          });
+        } else {
+          setSession({ isLoggedIn: false, user: null });
+        }
+      });
+      return () => subscription.unsubscribe();
+    });
+  }, []);
 
   // Keystroke dynamics tracking ref for behavioral biometrics
   const keystrokeTimingsRef = useRef<{
@@ -263,14 +298,7 @@ export default function PhoneSimulator({
   const [platDesc, setPlatDesc] = useState("");
 
   // Profil du Restaurant/Maquis (ÉTAPE 1)
-  const [restaurantProfile, setRestaurantProfile] = useState<{ name: string; location: string; phone: string } | null>(() => {
-    const saved = localStorage.getItem("bf_restaurant_profile");
-    return saved ? JSON.parse(saved) : null;
-  });
-
-  useEffect(() => {
-    localStorage.setItem("bf_restaurant_profile", JSON.stringify(restaurantProfile));
-  }, [restaurantProfile]);
+  const [restaurantProfile, setRestaurantProfile] = useState<{ name: string; location: string; phone: string } | null>(null);
   const [restName, setRestName] = useState("");
   const [restLocation, setRestLocation] = useState("");
   const [restPhone, setRestPhone] = useState("");
@@ -624,36 +652,31 @@ export default function PhoneSimulator({
   
   const [platImage, setPlatImage] = useState(FOOD_PRESETS[0].url);
 
-  const [platsDuJour, setPlatsDuJour] = useState<any[]>(() => {
-    const saved = localStorage.getItem("bf_plats_du_jour");
-    return saved ? JSON.parse(saved) : [
-      {
-        id: "p1",
-        name: "Amiwo au Poulet Bicyclette 🍗",
-        price: "3500",
-        description: "Pâte de maïs rouge parfumée aux épices locales avec poulet grillé ou frit.",
-        image: "https://images.unsplash.com/photo-1544025162-d76694265947?w=400&auto=format&fit=crop&q=60"
-      },
-      {
-        id: "p2",
-        name: "Atassi complet au Fromage Wagassi 🧀",
-        price: "1800",
-        description: "Mélange haricot-riz traditionnel servi avec friture parfumée et piment vert.",
-        image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&auto=format&fit=crop&q=60"
-      },
-      {
-        id: "p3",
-        name: "Gboma Dessi & Fromage 🥬",
-        price: "2200",
-        description: "Sauce gboma (épinards sauvages) mijotée au fromage local Wagassi.",
-        image: "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=400&auto=format&fit=crop&q=60"
-      }
-    ];
-  });
-
-  useEffect(() => {
-    localStorage.setItem("bf_plats_du_jour", JSON.stringify(platsDuJour));
-  }, [platsDuJour]);
+  // platsDuJour : données venant de Supabase via propsEtablissements / bf_menu_du_jour
+  // Affichage local uniquement (le hook useSupabaseData dans App.tsx gère la persistance)
+  const [platsDuJour, setPlatsDuJour] = useState<any[]>([
+    {
+      id: "p1",
+      name: "Amiwo au Poulet Bicyclette 🍗",
+      price: "3500",
+      description: "Pâte de maïs rouge parfumée aux épices locales avec poulet grillé ou frit.",
+      image: "https://images.unsplash.com/photo-1544025162-d76694265947?w=400&auto=format&fit=crop&q=60"
+    },
+    {
+      id: "p2",
+      name: "Atassi complet au Fromage Wagassi 🧀",
+      price: "1800",
+      description: "Mélange haricot-riz traditionnel servi avec friture parfumée et piment vert.",
+      image: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&auto=format&fit=crop&q=60"
+    },
+    {
+      id: "p3",
+      name: "Gboma Dessi & Fromage 🥬",
+      price: "2200",
+      description: "Sauce gboma (épinards sauvages) mijotée au fromage local Wagassi.",
+      image: "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=400&auto=format&fit=crop&q=60"
+    }
+  ]);
 
   const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -924,7 +947,11 @@ export default function PhoneSimulator({
     });
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    // Déconnexion Supabase Auth réelle
+    const { signOut } = await import("../lib/supabase");
+    await signOut();
+    // Reset état local
     setSession({ isLoggedIn: false, user: null });
     setAlertMessage(null);
     setName("");
