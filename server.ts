@@ -444,27 +444,26 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// ─── Démarrage serveur ────────────────────────────────────────────────────────
-async function startServer() {
-  if (process.env.NODE_ENV !== "production") {
+// ─── Démarrage serveur (Adapté pour Vercel & Local) ──────────────────────────
+if (process.env.NODE_ENV !== "production") {
+  async function startLocalServer() {
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
     app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), "dist");
-    app.use(express.static(distPath, { maxAge: "1h" }));
-    app.get("*", (_req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`✅ Serveur Local → http://localhost:${PORT}`);
     });
   }
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`✅ BéninFood Server → http://localhost:${PORT}`);
-    console.log(`   Gemini : ${ai ? "✅ Prêt" : "⚠️  Clé manquante"}`);
-    console.log(`   Supabase : ${SUPABASE_URL}`);
+  startLocalServer();
+} else {
+  const distPath = path.join(process.cwd(), "dist");
+  app.use(express.static(distPath, { maxAge: "1h" }));
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
   });
 }
 
-startServer();
+export default app;
+
