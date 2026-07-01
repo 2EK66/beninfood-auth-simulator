@@ -1,4 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
+import * as SecureStore from 'expo-secure-store';
+
+// Configuration de l'adaptateur de stockage pour Expo
+const ExpoSecureStoreAdapter = {
+  getItem: (key: string) => {
+    return SecureStore.getItemAsync(key);
+  },
+  setItem: (key: string, value: string) => {
+    return SecureStore.setItemAsync(key, value);
+  },
+  removeItem: (key: string) => {
+    return SecureStore.deleteItemAsync(key);
+  },
+};
 
 const SUPABASE_URL = "https://jafhpkbtxcmzufznnbxc.supabase.co";
 const SUPABASE_ANON_KEY =
@@ -6,9 +20,10 @@ const SUPABASE_ANON_KEY =
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
+    storage: ExpoSecureStoreAdapter as any, // Gère la session mobile automatiquement
     autoRefreshToken: true,
     persistSession: true,
-    storageKey: "bf_supabase_session",
+    detectSessionInUrl: false,
   },
 });
 
@@ -19,22 +34,23 @@ export async function getBfProfile(userId: string) {
     .select("id, name, phone, role")
     .eq("id", userId)
     .single();
+    
   if (error) console.error("getBfProfile error:", error.message);
   return data;
 }
 
-/** Déconnexion propre (Supabase + localStorage) */
+/** Déconnexion propre (Supabase + SecureStore) */
 export async function signOut() {
   await supabase.auth.signOut();
-  localStorage.removeItem("bf_supabase_session");
-  localStorage.removeItem("bf_mobile_session");
-  localStorage.removeItem("bf_restaurant_profile");
+  // Nettoyage asynchrone sur mobile
+  await SecureStore.deleteItemAsync("bf_mobile_session");
+  await SecureStore.deleteItemAsync("bf_restaurant_profile");
 }
 
-/** Récupère la session stockée */
-export function getStoredSession() {
+/** Récupère manuellement la session stockée (si besoin) */
+export async function getStoredSession() {
   try {
-    const raw = localStorage.getItem("bf_supabase_session");
+    const raw = await SecureStore.getItemAsync("bf_mobile_session");
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
