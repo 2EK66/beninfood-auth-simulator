@@ -1,0 +1,14 @@
+{
+  "expo": {
+    "name": "BeninFood",
+    "slug": "beninfood-auth-simulator",
+    "version": "1.0.0",
+    "scheme": "beninfood",
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
