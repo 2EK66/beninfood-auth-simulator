@@ -17,6 +17,25 @@ export interface PresetTheme {
   hex: string;     // Exact hex code
 }
 
+export interface BfProfile {
+  id: string;
+  name: string;
+  phone: string;
+  role: UserRole;
+}
+
+export interface BfOrder {
+  id: string;
+  created_at: string;
+  client_id: string;
+  restaurant_id: string;
+  delivery_person_id: string | null;
+  status: 'pending' | 'accepted' | 'preparing' | 'delivering' | 'delivered' | 'cancelled';
+  total_amount: number;
+  delivery_landmark: string | null;
+  delivery_phone?: string;
+}
+
 export interface AuthState {
   isLoggedIn: boolean;
   user: {
