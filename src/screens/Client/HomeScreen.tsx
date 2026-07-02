@@ -1,221 +1,226 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
-  View, Text, TouchableOpacity, FlatList,
-  SafeAreaView, StatusBar, ActivityIndicator,
-  RefreshControl,
+  View, Text, TextInput, TouchableOpacity,
+  ScrollView, SafeAreaView, StatusBar, ActivityIndicator,
 } from "react-native";
-import {
-  LayoutDashboard, ShoppingBag, CheckCircle2,
-  Clock, TrendingUp, LogOut, Store, AlertCircle,
-} from "lucide-react-native";
+import { Calendar, Clock, Users, MapPin, CheckCircle2, AlertCircle } from "lucide-react-native";
 import { supabase } from "../../lib/supabase";
-import { BfProfile, BfOrder, BfRestaurant } from "../../types";
-import { useRouter } from "expo-router";
+import { BfProfile } from "../../types";
 
 interface Props { user: BfProfile; }
 
-const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  pending:   { label: "En attente",  color: "#fbbf24", bg: "rgba(251,191,36,0.1)" },
-  accepted:  { label: "Acceptée",    color: "#60a5fa", bg: "rgba(96,165,250,0.1)" },
-  scanned:   { label: "En route",    color: "#a78bfa", bg: "rgba(167,139,250,0.1)" },
-  arrived:   { label: "Arrivé",      color: "#818cf8", bg: "rgba(129,140,248,0.1)" },
-  delivered: { label: "Livrée ✓",   color: "#34d399", bg: "rgba(52,211,153,0.1)" },
-  cancelled: { label: "Annulée",    color: "#f87171", bg: "rgba(248,113,113,0.1)" },
-};
+const TIME_SLOTS = ["11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30"];
+const GUEST_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
 
-export default function GerantHomeScreen({ user }: Props) {
-  const router = useRouter();
-  const [restaurant, setRestaurant] = useState<BfRestaurant | null>(null);
-  const [orders, setOrders] = useState<BfOrder[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+export default function ReservationScreen({ user }: Props) {
+  const [restaurantId, setRestaurantId] = useState("");
+  const [restaurantName, setRestaurantName] = useState("");
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [guests, setGuests] = useState(2);
+  const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
 
-  const fetchData = async () => {
-    // Récupérer le restaurant du gérant
-    const { data: rest } = await supabase
-      .from("bf_restaurants")
-      .select("*")
-      .eq("owner_id", user.id)
-      .single();
-    setRestaurant(rest);
+  const handleReserve = async () => {
+    setError("");
+    if (!restaurantName.trim()) return setError("Précisez le nom du restaurant.");
+    if (!date.trim()) return setError("Choisissez une date (ex: 15/07/2025).");
+    if (!time) return setError("Choisissez une heure.");
 
-    if (rest) {
-      // Commandes du restaurant
-      const { data: ord } = await supabase
-        .from("bf_orders")
-        .select("*")
-        .eq("restaurant_id", rest.id)
-        .order("created_at", { ascending: false })
-        .limit(20);
-      setOrders(ord || []);
-    }
+    setLoading(true);
+
+    const { error: err } = await supabase.from("bf_reservations").insert({
+      client_id: user.id,
+      restaurant_id: restaurantId || null,
+      restaurant_name_free: restaurantName.trim(),
+      date,
+      time,
+      guests,
+      note: note.trim() || null,
+      status: "pending",
+    });
+
     setLoading(false);
+    if (err) return setError("Erreur lors de la réservation. Réessayez.");
+    setSuccess(true);
   };
 
-  useEffect(() => {
-    fetchData();
-    // Realtime commandes
-    const channel = supabase
-      .channel("gerant_orders")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "bf_orders" },
-        (payload) => setOrders(prev => [payload.new as BfOrder, ...prev])
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, []);
-
-  const onRefresh = async () => {
-    setRefreshing(true);
-    await fetchData();
-    setRefreshing(false);
-  };
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.replace("/(auth)/login");
-  };
-
-  // Stats
-  const delivered = orders.filter(o => o.status === "delivered").length;
-  const pending = orders.filter(o => o.status === "pending").length;
-  const revenue = orders
-    .filter(o => o.status === "delivered")
-    .reduce((s, o) => s + Number(o.restaurant_amount), 0);
-
-  if (loading) {
+  if (success) {
     return (
-      <View className="flex-1 bg-[#0a0f0d] items-center justify-center">
-        <ActivityIndicator color="#fcd116" size="large" />
-      </View>
+      <SafeAreaView className="flex-1 bg-bf-dark items-center justify-center p-6">
+        <View className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500 items-center justify-center mb-4">
+          <CheckCircle2 size={32} color="#34d399" />
+        </View>
+        <Text className="text-white font-black text-xl mb-2">Réservation envoyée !</Text>
+        <Text className="text-white/50 text-sm text-center leading-relaxed mb-6">
+          Votre demande pour <Text className="text-white font-bold">{restaurantName}</Text> le{" "}
+          <Text className="text-white font-bold">{date}</Text> à{" "}
+          <Text className="text-white font-bold">{time}</Text> pour{" "}
+          <Text className="text-white font-bold">{guests} personne{guests > 1 ? "s" : ""}</Text> a bien été transmise.
+          Le gérant vous confirmera par téléphone.
+        </Text>
+        <TouchableOpacity
+          onPress={() => { setSuccess(false); setDate(""); setTime(""); setNote(""); setRestaurantName(""); }}
+          className="px-8 py-3 rounded-2xl"
+          style={{ backgroundColor: "#fcd116" }}
+        >
+          <Text className="text-bf-dark font-black">Nouvelle réservation</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-[#0a0f0d]">
-      <StatusBar barStyle="light-content" backgroundColor="#0a0f0d" />
+    <SafeAreaView className="flex-1 bg-bf-dark">
+      <StatusBar barStyle="light-content" backgroundColor="#001f13" />
 
-      {/* Header */}
-      <View className="px-5 pt-4 pb-3 flex-row items-center justify-between border-b border-[#1a2e1f]">
-        <View>
-          <Text className="text-[10px] font-bold text-[#fcd116] uppercase tracking-widest">
-            Gérant • BéninFood
-          </Text>
-          <Text className="text-lg font-black text-white mt-0.5">
-            {user.name.split(" ")[0]} 👋
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={handleLogout}
-          className="p-2.5 bg-red-500/10 rounded-xl border border-red-500/20"
-        >
-          <LogOut size={18} color="#f87171" />
-        </TouchableOpacity>
+      <View className="px-5 pt-4 pb-3 border-b border-bf-border">
+        <Text className="text-xl font-black text-white">Réserver une table</Text>
+        <Text className="text-white/40 text-xs mt-1">Réservation dans les maquis et restaurants BéninFood</Text>
       </View>
 
-      <FlatList
-        data={orders}
-        keyExtractor={o => o.id}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#fcd116" />}
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
-        ListHeaderComponent={
-          <View>
-            {/* Restaurant info */}
-            {restaurant ? (
-              <View className="bg-[#0d1a12] border border-[#1a2e1f] rounded-2xl p-4 mb-5">
-                <View className="flex-row items-center gap-3">
-                  <View className="w-10 h-10 bg-emerald-500/10 border border-emerald-500/20 rounded-xl items-center justify-center">
-                    <Store size={18} color="#34d399" />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-black text-white">{restaurant.name}</Text>
-                    <Text className="text-xs text-white/40 mt-0.5">{restaurant.location}</Text>
-                  </View>
-                  <View className="bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full">
-                    <Text className="text-[10px] font-black text-emerald-400">Ouvert</Text>
-                  </View>
-                </View>
-              </View>
-            ) : (
-              <View className="bg-amber-500/10 border border-amber-500/20 rounded-2xl p-4 mb-5 flex-row gap-3">
-                <AlertCircle size={18} color="#fbbf24" />
-                <View className="flex-1">
-                  <Text className="text-sm font-bold text-amber-300">Restaurant non configuré</Text>
-                  <Text className="text-xs text-white/50 mt-0.5">
-                    Configurez votre restaurant dans l'onglet Menu.
-                  </Text>
-                </View>
-              </View>
-            )}
+      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
 
-            {/* KPIs */}
-            <View className="flex-row gap-3 mb-5">
-              <View className="flex-1 bg-[#0d1a12] border border-[#1a2e1f] rounded-2xl p-4">
-                <TrendingUp size={16} color="#fcd116" />
-                <Text className="text-xl font-black text-[#fcd116] mt-2">
-                  {revenue.toLocaleString("fr-FR")} F
-                </Text>
-                <Text className="text-[10px] text-white/40 font-bold mt-0.5">Revenus</Text>
-              </View>
-              <View className="flex-1 bg-[#0d1a12] border border-[#1a2e1f] rounded-2xl p-4">
-                <CheckCircle2 size={16} color="#34d399" />
-                <Text className="text-xl font-black text-white mt-2">{delivered}</Text>
-                <Text className="text-[10px] text-white/40 font-bold mt-0.5">Livrées</Text>
-              </View>
-              <View className="flex-1 bg-[#0d1a12] border border-[#1a2e1f] rounded-2xl p-4">
-                <Clock size={16} color="#fbbf24" />
-                <Text className="text-xl font-black text-white mt-2">{pending}</Text>
-                <Text className="text-[10px] text-white/40 font-bold mt-0.5">En attente</Text>
-              </View>
-            </View>
+        {error ? (
+          <View className="flex-row items-start gap-x-2 bg-red-500/10 border border-red-500/20 rounded-2xl p-3">
+            <AlertCircle size={15} color="#f87171" style={{ marginTop: 1 }} />
+            <Text className="text-red-300 text-xs font-semibold flex-1">{error}</Text>
+          </View>
+        ) : null}
 
-            {/* Section titre */}
-            <View className="flex-row items-center justify-between mb-3">
-              <Text className="text-sm font-black text-white">Commandes récentes</Text>
-              <Text className="text-[10px] text-white/30 font-mono">bf_orders</Text>
-            </View>
+        {/* Restaurant */}
+        <View>
+          <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
+            Restaurant / Maquis
+          </Text>
+          <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-3 gap-x-3">
+            <MapPin size={16} color="#94A3B8" />
+            <TextInput
+              placeholder="Ex: Chez Maman Bénin, Cotonou"
+              placeholderTextColor="#94A3B8"
+              value={restaurantName}
+              onChangeText={setRestaurantName}
+              className="flex-1 text-white text-sm font-semibold"
+            />
           </View>
-        }
-        renderItem={({ item: order }) => {
-          const s = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending;
-          return (
-            <View className="bg-[#0d1a12] border border-[#1a2e1f] rounded-2xl p-4 mb-3">
-              <View className="flex-row items-center justify-between mb-2">
-                <Text className="text-xs font-black text-white font-mono">
-                  #{order.id.slice(0, 8)}
-                </Text>
-                <View style={{ backgroundColor: s.bg }} className="px-2.5 py-1 rounded-full">
-                  <Text style={{ color: s.color }} className="text-[10px] font-bold">
-                    {s.label}
-                  </Text>
-                </View>
-              </View>
-              <View className="flex-row items-center justify-between">
-                <Text className="text-xs text-white/40">
-                  {new Date(order.created_at).toLocaleString("fr-FR", {
-                    day: "2-digit", month: "short",
-                    hour: "2-digit", minute: "2-digit",
-                  })}
-                </Text>
-                <Text className="text-sm font-black text-[#fcd116]">
-                  {Number(order.restaurant_amount).toLocaleString()} F
-                </Text>
-              </View>
-              {order.delivery_landmark && (
-                <Text className="text-[10px] text-white/30 mt-1.5" numberOfLines={1}>
-                  📍 {order.delivery_landmark}
-                </Text>
-              )}
-            </View>
-          );
-        }}
-        ListEmptyComponent={
-          <View className="items-center py-12">
-            <ShoppingBag size={36} color="rgba(255,255,255,0.1)" />
-            <Text className="text-sm text-white/30 mt-3">Aucune commande pour l'instant</Text>
+        </View>
+
+        {/* Date */}
+        <View>
+          <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">Date</Text>
+          <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-3 gap-x-3">
+            <Calendar size={16} color="#94A3B8" />
+            <TextInput
+              placeholder="Ex: 15/07/2025"
+              placeholderTextColor="#94A3B8"
+              value={date}
+              onChangeText={setDate}
+              className="flex-1 text-white text-sm font-semibold"
+              keyboardType="numeric"
+            />
           </View>
-        }
-      />
+        </View>
+
+        {/* Heure */}
+        <View>
+          <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
+            Heure
+          </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {TIME_SLOTS.map(t => (
+              <TouchableOpacity
+                key={t}
+                onPress={() => setTime(t)}
+                className="px-4 py-2 rounded-xl border"
+                style={{
+                  backgroundColor: time === t ? "#fcd116" : "rgba(255,255,255,0.05)",
+                  borderColor: time === t ? "#fcd116" : "rgba(255,255,255,0.1)",
+                }}
+              >
+                <Text className="text-xs font-black" style={{ color: time === t ? "#001f13" : "rgba(255,255,255,0.7)" }}>
+                  {t}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Nombre de personnes */}
+        <View>
+          <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
+            Nombre de personnes
+          </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {GUEST_OPTIONS.map(g => (
+              <TouchableOpacity
+                key={g}
+                onPress={() => setGuests(g)}
+                className="w-10 h-10 rounded-xl border items-center justify-center"
+                style={{
+                  backgroundColor: guests === g ? "#fcd116" : "rgba(255,255,255,0.05)",
+                  borderColor: guests === g ? "#fcd116" : "rgba(255,255,255,0.1)",
+                }}
+              >
+                <Text className="text-sm font-black" style={{ color: guests === g ? "#001f13" : "rgba(255,255,255,0.7)" }}>
+                  {g}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Note */}
+        <View>
+          <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
+            Note / Demande spéciale (optionnel)
+          </Text>
+          <TextInput
+            placeholder="Ex: Table en terrasse, anniversaire, régime alimentaire…"
+            placeholderTextColor="#94A3B8"
+            value={note}
+            onChangeText={setNote}
+            multiline
+            numberOfLines={3}
+            textAlignVertical="top"
+            className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm font-medium"
+            style={{ minHeight: 80 }}
+          />
+        </View>
+
+        {/* Résumé */}
+        {date && time && (
+          <View className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 gap-y-1.5">
+            <Text className="text-emerald-300 text-xs font-black uppercase tracking-wider mb-1">
+              Récapitulatif
+            </Text>
+            <Text className="text-white text-sm">
+              📍 <Text className="font-bold">{restaurantName || "—"}</Text>
+            </Text>
+            <Text className="text-white text-sm">
+              📅 <Text className="font-bold">{date}</Text> à <Text className="font-bold">{time}</Text>
+            </Text>
+            <Text className="text-white text-sm">
+              👥 <Text className="font-bold">{guests} personne{guests > 1 ? "s" : ""}</Text>
+            </Text>
+          </View>
+        )}
+
+        {/* Bouton */}
+        <TouchableOpacity
+          onPress={handleReserve}
+          disabled={loading}
+          activeOpacity={0.85}
+          className="w-full py-4 rounded-2xl items-center justify-center"
+          style={{ backgroundColor: "#fcd116" }}
+        >
+          {loading
+            ? <ActivityIndicator size="small" color="#001f13" />
+            : <Text className="text-bf-dark font-black text-base">Confirmer la réservation</Text>
+          }
+        </TouchableOpacity>
+      </ScrollView>
     </SafeAreaView>
   );
 }
