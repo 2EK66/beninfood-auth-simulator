@@ -1,226 +1,263 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
-  View, Text, TextInput, TouchableOpacity,
-  ScrollView, SafeAreaView, StatusBar, ActivityIndicator,
+  View, Text, TouchableOpacity, FlatList,
+  TextInput, Image, ScrollView, SafeAreaView,
+  StatusBar, RefreshControl, ActivityIndicator,
 } from "react-native";
-import { Calendar, Clock, Users, MapPin, CheckCircle2, AlertCircle } from "lucide-react-native";
-import { supabase } from "../../lib/supabase";
-import { BfProfile } from "../../types";
+import {
+  Search, MapPin, Star, ShoppingBag, Bell,
+  LogOut, Utensils, Plus, SlidersHorizontal,
+} from "lucide-react-native";
+import { supabase, signOutUser } from "../../lib/supabase";
+import { BfProfile, BfRestaurant, BfMenuItem, CartItem } from "../../types";
 
-interface Props { user: BfProfile; }
+interface Props {
+  user: BfProfile;
+}
 
-const TIME_SLOTS = ["11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30"];
-const GUEST_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8];
+const CATEGORIES = ["Tous", "Maquis 🇧🇯", "Grillades", "Fast-Food", "Pâtisseries"];
 
-export default function ReservationScreen({ user }: Props) {
-  const [restaurantId, setRestaurantId] = useState("");
-  const [restaurantName, setRestaurantName] = useState("");
-  const [date, setDate] = useState("");
-  const [time, setTime] = useState("");
-  const [guests, setGuests] = useState(2);
-  const [note, setNote] = useState("");
+const FALLBACK_RESTAURANTS: BfRestaurant[] = [
+  { id: "1", owner_id: "", name: "Chez Maman Bénin", location: "Cotonou, Fidjrossè", phone: null, category: "Maquis 🇧🇯", rating: 4.8, image_url: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=400&auto=format&fit=crop&q=60", description: "Le meilleur Atassi et friture de Cotonou.", created_at: "" },
+  { id: "2", owner_id: "", name: "Le Choukouya National", location: "Parakou, Dépôt", phone: null, category: "Grillades", rating: 4.6, image_url: "https://images.unsplash.com/photo-1544025162-d76694265947?w=400&auto=format&fit=crop&q=60", description: "Grillades tendres de mouton et poulet.", created_at: "" },
+  { id: "3", owner_id: "", name: "Pâtisserie Royale", location: "Porto-Novo, Tokpota", phone: null, category: "Pâtisseries", rating: 4.5, image_url: "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=400&auto=format&fit=crop&q=60", description: "Douceurs sucrées et gâteaux béninois.", created_at: "" },
+  { id: "4", owner_id: "", name: "Dany Fast-Food", location: "Cotonou, Zongo", phone: null, category: "Fast-Food", rating: 4.3, image_url: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&auto=format&fit=crop&q=60", description: "Burgers avec frites d'igname locale.", created_at: "" },
+];
+
+export default function HomeScreen({ user }: Props) {
+  const [restaurants, setRestaurants] = useState<BfRestaurant[]>(FALLBACK_RESTAURANTS);
+  const [menuItems, setMenuItems] = useState<BfMenuItem[]>([]);
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("Tous");
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
-  const handleReserve = async () => {
-    setError("");
-    if (!restaurantName.trim()) return setError("Précisez le nom du restaurant.");
-    if (!date.trim()) return setError("Choisissez une date (ex: 15/07/2025).");
-    if (!time) return setError("Choisissez une heure.");
-
+  const fetchData = async () => {
     setLoading(true);
-
-    const { error: err } = await supabase.from("bf_reservations").insert({
-      client_id: user.id,
-      restaurant_id: restaurantId || null,
-      restaurant_name_free: restaurantName.trim(),
-      date,
-      time,
-      guests,
-      note: note.trim() || null,
-      status: "pending",
-    });
-
+    const [restRes, menuRes] = await Promise.all([
+      supabase.from("bf_restaurants").select("*").order("created_at", { ascending: false }),
+      supabase.from("bf_menu_du_jour").select("*").eq("is_available", true).order("created_at", { ascending: false }),
+    ]);
+    if (restRes.data && restRes.data.length > 0) setRestaurants(restRes.data);
+    if (menuRes.data) setMenuItems(menuRes.data);
     setLoading(false);
-    if (err) return setError("Erreur lors de la réservation. Réessayez.");
-    setSuccess(true);
+    setRefreshing(false);
   };
 
-  if (success) {
-    return (
-      <SafeAreaView className="flex-1 bg-bf-dark items-center justify-center p-6">
-        <View className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500 items-center justify-center mb-4">
-          <CheckCircle2 size={32} color="#34d399" />
-        </View>
-        <Text className="text-white font-black text-xl mb-2">Réservation envoyée !</Text>
-        <Text className="text-white/50 text-sm text-center leading-relaxed mb-6">
-          Votre demande pour <Text className="text-white font-bold">{restaurantName}</Text> le{" "}
-          <Text className="text-white font-bold">{date}</Text> à{" "}
-          <Text className="text-white font-bold">{time}</Text> pour{" "}
-          <Text className="text-white font-bold">{guests} personne{guests > 1 ? "s" : ""}</Text> a bien été transmise.
-          Le gérant vous confirmera par téléphone.
-        </Text>
-        <TouchableOpacity
-          onPress={() => { setSuccess(false); setDate(""); setTime(""); setNote(""); setRestaurantName(""); }}
-          className="px-8 py-3 rounded-2xl"
-          style={{ backgroundColor: "#fcd116" }}
-        >
-          <Text className="text-bf-dark font-black">Nouvelle réservation</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    );
-  }
+  useEffect(() => { fetchData(); }, []);
+
+  const addToCart = (item: BfMenuItem, restaurant: BfRestaurant) => {
+    setCart(prev => {
+      const existing = prev.find(c => c.menuItemId === item.id);
+      if (existing) return prev.map(c => c.menuItemId === item.id ? { ...c, quantity: c.quantity + 1 } : c);
+      return [...prev, {
+        menuItemId: item.id, name: item.dish_name, price: item.price,
+        quantity: 1, image_url: item.image_url,
+        restaurantId: restaurant.id, restaurantName: restaurant.name,
+      }];
+    });
+  };
+
+  const cartTotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
+  const cartCount = cart.reduce((s, c) => s + c.quantity, 0);
+
+  const filtered = restaurants.filter(r => {
+    const matchSearch = r.name.toLowerCase().includes(search.toLowerCase()) ||
+      (r.description || "").toLowerCase().includes(search.toLowerCase());
+    const matchCat = category === "Tous" || r.category === category;
+    return matchSearch && matchCat;
+  });
 
   return (
     <SafeAreaView className="flex-1 bg-bf-dark">
       <StatusBar barStyle="light-content" backgroundColor="#001f13" />
 
-      <View className="px-5 pt-4 pb-3 border-b border-bf-border">
-        <Text className="text-xl font-black text-white">Réserver une table</Text>
-        <Text className="text-white/40 text-xs mt-1">Réservation dans les maquis et restaurants BéninFood</Text>
+      {/* Header */}
+      <View className="px-5 pt-3 pb-4 bg-bf-green/30 border-b border-bf-border flex-row items-center justify-between">
+        <View className="flex-row items-center gap-x-3">
+          <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: "#fcd116" }}>
+            <Text className="text-bf-dark font-black text-sm">
+              {user.name.charAt(0).toUpperCase()}
+            </Text>
+          </View>
+          <View>
+            <Text className="text-white/40 text-xs font-semibold">Akwaaba 👋</Text>
+            <Text className="text-white font-black text-sm">{user.name}</Text>
+          </View>
+        </View>
+        <View className="flex-row items-center gap-x-2">
+          <TouchableOpacity className="w-9 h-9 bg-white/5 border border-white/10 rounded-full items-center justify-center">
+            <Bell size={16} color="#fcd116" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={signOutUser}
+            className="w-9 h-9 bg-red-500/10 border border-red-500/20 rounded-full items-center justify-center"
+          >
+            <LogOut size={15} color="#ef4444" />
+          </TouchableOpacity>
+        </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
-
-        {error ? (
-          <View className="flex-row items-start gap-x-2 bg-red-500/10 border border-red-500/20 rounded-2xl p-3">
-            <AlertCircle size={15} color="#f87171" style={{ marginTop: 1 }} />
-            <Text className="text-red-300 text-xs font-semibold flex-1">{error}</Text>
-          </View>
-        ) : null}
-
-        {/* Restaurant */}
-        <View>
-          <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
-            Restaurant / Maquis
-          </Text>
-          <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-3 gap-x-3">
-            <MapPin size={16} color="#94A3B8" />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchData(); }} tintColor="#fcd116" />}
+        contentContainerStyle={{ paddingBottom: cart.length > 0 ? 100 : 24 }}
+      >
+        {/* Barre de recherche */}
+        <View className="px-5 pt-4">
+          <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 h-12 gap-x-3">
+            <Search size={16} color="#94A3B8" />
             <TextInput
-              placeholder="Ex: Chez Maman Bénin, Cotonou"
+              placeholder="Atassi, Amiwo, Fufu, maquis…"
               placeholderTextColor="#94A3B8"
-              value={restaurantName}
-              onChangeText={setRestaurantName}
-              className="flex-1 text-white text-sm font-semibold"
+              value={search}
+              onChangeText={setSearch}
+              className="flex-1 text-white text-sm font-medium"
             />
-          </View>
-        </View>
-
-        {/* Date */}
-        <View>
-          <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">Date</Text>
-          <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-3 gap-x-3">
-            <Calendar size={16} color="#94A3B8" />
-            <TextInput
-              placeholder="Ex: 15/07/2025"
-              placeholderTextColor="#94A3B8"
-              value={date}
-              onChangeText={setDate}
-              className="flex-1 text-white text-sm font-semibold"
-              keyboardType="numeric"
-            />
-          </View>
-        </View>
-
-        {/* Heure */}
-        <View>
-          <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
-            Heure
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {TIME_SLOTS.map(t => (
-              <TouchableOpacity
-                key={t}
-                onPress={() => setTime(t)}
-                className="px-4 py-2 rounded-xl border"
-                style={{
-                  backgroundColor: time === t ? "#fcd116" : "rgba(255,255,255,0.05)",
-                  borderColor: time === t ? "#fcd116" : "rgba(255,255,255,0.1)",
-                }}
-              >
-                <Text className="text-xs font-black" style={{ color: time === t ? "#001f13" : "rgba(255,255,255,0.7)" }}>
-                  {t}
-                </Text>
+            {search ? (
+              <TouchableOpacity onPress={() => setSearch("")}>
+                <Text className="text-white/40 text-lg font-bold">×</Text>
               </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Nombre de personnes */}
-        <View>
-          <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
-            Nombre de personnes
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {GUEST_OPTIONS.map(g => (
-              <TouchableOpacity
-                key={g}
-                onPress={() => setGuests(g)}
-                className="w-10 h-10 rounded-xl border items-center justify-center"
-                style={{
-                  backgroundColor: guests === g ? "#fcd116" : "rgba(255,255,255,0.05)",
-                  borderColor: guests === g ? "#fcd116" : "rgba(255,255,255,0.1)",
-                }}
-              >
-                <Text className="text-sm font-black" style={{ color: guests === g ? "#001f13" : "rgba(255,255,255,0.7)" }}>
-                  {g}
-                </Text>
+            ) : (
+              <TouchableOpacity>
+                <SlidersHorizontal size={15} color="#fcd116" />
               </TouchableOpacity>
-            ))}
+            )}
           </View>
         </View>
 
-        {/* Note */}
-        <View>
-          <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
-            Note / Demande spéciale (optionnel)
-          </Text>
-          <TextInput
-            placeholder="Ex: Table en terrasse, anniversaire, régime alimentaire…"
-            placeholderTextColor="#94A3B8"
-            value={note}
-            onChangeText={setNote}
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-            className="bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white text-sm font-medium"
-            style={{ minHeight: 80 }}
-          />
-        </View>
+        {/* Catégories */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-4" contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
+          {CATEGORIES.map(cat => (
+            <TouchableOpacity
+              key={cat}
+              onPress={() => setCategory(cat)}
+              className="px-4 py-2 rounded-full border"
+              style={{
+                backgroundColor: category === cat ? "#fcd116" : "rgba(255,255,255,0.05)",
+                borderColor: category === cat ? "#fcd116" : "rgba(255,255,255,0.1)",
+              }}
+            >
+              <Text className="text-xs font-black" style={{ color: category === cat ? "#001f13" : "rgba(255,255,255,0.7)" }}>
+                {cat}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-        {/* Résumé */}
-        {date && time && (
-          <View className="bg-emerald-500/5 border border-emerald-500/20 rounded-2xl p-4 gap-y-1.5">
-            <Text className="text-emerald-300 text-xs font-black uppercase tracking-wider mb-1">
-              Récapitulatif
-            </Text>
-            <Text className="text-white text-sm">
-              📍 <Text className="font-bold">{restaurantName || "—"}</Text>
-            </Text>
-            <Text className="text-white text-sm">
-              📅 <Text className="font-bold">{date}</Text> à <Text className="font-bold">{time}</Text>
-            </Text>
-            <Text className="text-white text-sm">
-              👥 <Text className="font-bold">{guests} personne{guests > 1 ? "s" : ""}</Text>
-            </Text>
+        {/* Plats du jour */}
+        {menuItems.length > 0 && (
+          <View className="mt-5">
+            <View className="flex-row items-center justify-between px-5 mb-3">
+              <Text className="text-white font-black text-sm">🔥 Plats du Jour</Text>
+              <Text className="text-xs font-bold" style={{ color: "#fcd116" }}>Menu live 🇧🇯</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
+              {menuItems.map(item => {
+                const rest = restaurants.find(r => r.id === item.restaurant_id);
+                return (
+                  <View key={item.id} className="w-36 bg-bf-card border border-bf-border rounded-2xl overflow-hidden">
+                    {item.image_url ? (
+                      <Image source={{ uri: item.image_url }} className="w-full h-20" resizeMode="cover" />
+                    ) : (
+                      <View className="w-full h-20 bg-white/5 items-center justify-center">
+                        <Utensils size={24} color="#fcd116" />
+                      </View>
+                    )}
+                    <View className="p-2">
+                      <Text className="text-white font-black text-xs" numberOfLines={1}>{item.dish_name}</Text>
+                      <Text className="text-white/40 text-[9px] mt-0.5" numberOfLines={1}>{item.description}</Text>
+                      <View className="flex-row items-center justify-between mt-2">
+                        <Text className="font-black text-xs" style={{ color: "#fcd116" }}>{item.price.toLocaleString()} F</Text>
+                        {rest && (
+                          <TouchableOpacity
+                            onPress={() => addToCart(item, rest)}
+                            className="w-6 h-6 rounded-lg items-center justify-center"
+                            style={{ backgroundColor: "#fcd116" }}
+                          >
+                            <Plus size={12} color="#001f13" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </ScrollView>
           </View>
         )}
 
-        {/* Bouton */}
-        <TouchableOpacity
-          onPress={handleReserve}
-          disabled={loading}
-          activeOpacity={0.85}
-          className="w-full py-4 rounded-2xl items-center justify-center"
-          style={{ backgroundColor: "#fcd116" }}
-        >
-          {loading
-            ? <ActivityIndicator size="small" color="#001f13" />
-            : <Text className="text-bf-dark font-black text-base">Confirmer la réservation</Text>
-          }
-        </TouchableOpacity>
+        {/* Restaurants */}
+        <View className="mt-5 px-5">
+          <View className="flex-row items-center justify-between mb-3">
+            <Text className="text-white font-black text-sm">
+              Maquis à proximité ({filtered.length})
+            </Text>
+            <Text className="text-white/30 text-[9px] font-mono">bf_restaurants</Text>
+          </View>
+
+          {loading ? (
+            <ActivityIndicator color="#fcd116" className="mt-8" />
+          ) : filtered.length === 0 ? (
+            <View className="items-center py-12 bg-white/5 rounded-2xl border border-white/10">
+              <Utensils size={32} color="#94A3B8" />
+              <Text className="text-white/40 text-sm mt-3">Aucun résultat pour "{search}"</Text>
+            </View>
+          ) : (
+            filtered.map(r => (
+              <View key={r.id} className="bg-bf-card border border-bf-border rounded-2xl overflow-hidden mb-4">
+                {r.image_url ? (
+                  <Image source={{ uri: r.image_url }} className="w-full h-36" resizeMode="cover" />
+                ) : (
+                  <View className="w-full h-36 bg-white/5 items-center justify-center">
+                    <Utensils size={32} color="#fcd116" />
+                  </View>
+                )}
+                {/* Badge note */}
+                <View className="absolute top-3 right-3 flex-row items-center bg-black/60 px-2 py-1 rounded-lg gap-x-1">
+                  <Star size={10} fill="#fcd116" color="#fcd116" />
+                  <Text className="text-white font-black text-xs">{(r.rating || 4.5).toFixed(1)}</Text>
+                </View>
+                <View className="p-3">
+                  <View className="flex-row items-center justify-between mb-1">
+                    <Text className="text-white font-black text-sm flex-1 mr-2" numberOfLines={1}>{r.name}</Text>
+                    <View className="bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded">
+                      <Text className="text-emerald-400 text-[9px] font-black">{r.category || "Maquis 🇧🇯"}</Text>
+                    </View>
+                  </View>
+                  <Text className="text-white/50 text-xs" numberOfLines={2}>{r.description}</Text>
+                  <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-white/5">
+                    <View className="flex-row items-center gap-x-1">
+                      <MapPin size={10} color="#ef4444" />
+                      <Text className="text-white/40 text-[10px] font-bold">{r.location}</Text>
+                    </View>
+                    <Text className="text-emerald-400 text-[9px] font-black">🛵 Livraison rapide</Text>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
+        </View>
       </ScrollView>
+
+      {/* Floating cart bar */}
+      {cartCount > 0 && (
+        <View className="absolute bottom-5 left-5 right-5 bg-bf-green border border-bf-gold/30 rounded-2xl px-4 py-3 flex-row items-center justify-between shadow-2xl">
+          <View className="flex-row items-center gap-x-3">
+            <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: "rgba(252,209,22,0.15)" }}>
+              <ShoppingBag size={14} color="#fcd116" />
+            </View>
+            <View>
+              <Text className="text-white font-black text-xs">{cartCount} plat{cartCount > 1 ? "s" : ""}</Text>
+              <Text className="text-white/50 text-[10px]">{cartTotal.toLocaleString()} FCFA</Text>
+            </View>
+          </View>
+          <TouchableOpacity className="flex-row items-center px-4 py-2 rounded-xl gap-x-1.5" style={{ backgroundColor: "#fcd116" }}>
+            <Text className="text-bf-dark font-black text-xs">Commander</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
