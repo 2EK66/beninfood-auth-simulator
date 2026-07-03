@@ -1,0 +1,55 @@
+{
+  "expo": {
+    "name": "BéninFood",
+    "slug": "beninfood",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#004d31"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "bj.beninfood.app",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "BéninFood utilise votre position pour la livraison.",
+        "NSLocationAlwaysUsageDescription": "BéninFood utilise votre position pour le suivi de livraison."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#004d31"
+      },
+      "package": "bj.beninfood.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "VIBRATE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-build-properties",
+        {
+          "ios": { "deploymentTarget": "15.1" },
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35
+          }
+        }
+      ]
+    ],
+    "scheme": "beninfood",
+    "extra": {
+      "supabaseUrl": "https://jafhpkbtxcmzufznnbxc.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphZmhwa2J0eGNtenVmem5uYnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NjMxNjcsImV4cCI6MjA5MDQzOTE2N30.PruNINSYGjCwhsiZhcIFVJRX6ix0zJKQMIJKta3YlEM",
+      "eas": {
+        "projectId": "beninfood"
+      }
+    }
+  }
+}
