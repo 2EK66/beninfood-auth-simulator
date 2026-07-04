@@ -5,6 +5,10 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "platforms": [
+      "android",
+      "ios"
+    ],
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#004d31"
