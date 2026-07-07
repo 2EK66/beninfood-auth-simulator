@@ -1,14 +1,10 @@
 {
   "expo": {
     "name": "BéninFood",
-    "slug": "beninfood-8oiyb43gkws79k9ibdwf",
+    "slug": "beninfood",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "platforms": [
-      "android",
-      "ios"
-    ],
     "splash": {
       "resizeMode": "contain",
       "backgroundColor": "#004d31"
@@ -39,26 +35,26 @@
       [
         "expo-build-properties",
         {
-          "ios": { "deploymentTarget": "15.1" },
+          "ios": {
+            "deploymentTarget": "15.1"
+          },
           "android": {
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
-            "minSdkVersion": 24
+            "minSdkVersion": 24,
+            "kotlinVersion": "1.9.24"
           }
         }
       ]
     ],
     "scheme": "beninfood",
+    "newArchEnabled": false,
     "extra": {
       "supabaseUrl": "https://jafhpkbtxcmzufznnbxc.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphZmhwa2J0eGNtenVmem5uYnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NjMxNjcsImV4cCI6MjA5MDQzOTE2N30.PruNINSYGjCwhsiZhcIFVJRX6ix0zJKQMIJKta3YlEM",
       "eas": {
-        "projectId": "549dc85e-1c20-42c1-8085-3d8bf9493547"
-      },
-      "router": {
-        "origin": false
+        "projectId": "beninfood"
       }
-    },
-    "newArchEnabled": false
+    }
   }
 }
