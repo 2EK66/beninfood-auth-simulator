@@ -7,26 +7,14 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "node": "22.11.0",
       "android": {
-        "buildType": "apk",
-        "gradleCommand": ":app:assembleDebug"
-      },
-      "ios": {
-        "simulator": true
-      },
-      "env": {
-        "NODE_ENV": "development"
+        "buildType": "apk"
       }
     },
     "preview": {
       "distribution": "internal",
-      "node": "22.11.0",
       "android": {
         "buildType": "apk"
-      },
-      "ios": {
-        "simulator": false
       },
       "env": {
         "NODE_ENV": "production"
@@ -34,22 +22,11 @@
     },
     "production": {
       "distribution": "store",
-      "node": "22.11.0",
       "android": {
         "buildType": "app-bundle"
       },
-      "ios": {
-        "simulator": false
-      },
       "env": {
         "NODE_ENV": "production"
-      }
-    }
-  },
-  "submit": {
-    "production": {
-      "android": {
-        "track": "internal"
       }
     }
   }
