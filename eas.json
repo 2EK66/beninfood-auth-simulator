@@ -13,6 +13,7 @@
     },
     "preview": {
       "distribution": "internal",
+      "image": "ubuntu-24.04",
       "android": {
         "buildType": "apk"
       },
