@@ -1,4 +1,7 @@
 import "../src/global.css";
+// ✅ 1. Importation du polyfill d'URL au TOUT DÉBUT pour corriger le "Network request failed"
+import 'react-native-url-polyfill/auto'; 
+
 import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -8,6 +11,7 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   useEffect(() => {
+    // Le SplashScreen se cache dès que le layout est monté
     SplashScreen.hideAsync();
   }, []);
 

@@ -5,7 +5,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "bj.beninfood.app",
@@ -43,7 +45,9 @@
             "agpVersion": "8.2.1"
           }
         }
-      ]
+      ],
+      "expo-asset",
+      "expo-font"
     ],
     "scheme": "beninfood",
     "newArchEnabled": false,

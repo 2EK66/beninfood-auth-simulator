@@ -1,12 +1,15 @@
 import React, { useState } from "react";
 import {
   View, Text, TextInput, TouchableOpacity,
-  ScrollView, SafeAreaView, StatusBar,
+  ScrollView, StatusBar,
   KeyboardAvoidingView, Platform, ActivityIndicator,
 } from "react-native";
+// ✅ Import SafeAreaView depuis le bon package pour éviter le Warning
+import { SafeAreaView } from "react-native-safe-area-context"; 
+// ✅ Tous les imports d'icônes sont regroupés proprement ici
 import {
   Phone, Lock, User, ArrowRight, ShoppingBag,
-  Utensils, Check, Bike,
+  Utensils, Check, Bike, Eye, EyeOff
 } from "lucide-react-native";
 import { signUp } from "../../lib/auth";
 import { UserRole } from "../../types";
@@ -231,6 +234,7 @@ export default function RegisterScreen({ onToggle }: Props) {
             </TouchableOpacity>
           </View>
 
+          {/* Drapeau du Bénin miniature en bas, magnifique 🇧🇯 */}
           <View className="flex-row mx-auto w-20 h-1 rounded-full overflow-hidden">
             <View className="flex-1 bg-emerald-500" />
             <View style={{ flex: 1, backgroundColor: "#fcd116" }} />
