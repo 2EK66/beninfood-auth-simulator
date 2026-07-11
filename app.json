@@ -41,7 +41,7 @@
             "targetSdkVersion": 35,
             "minSdkVersion": 24,
             "buildToolsVersion": "35.0.0",
-            "kotlinVersion": "1.9.24",
+            "kotlinVersion": "2.1.20",
             "agpVersion": "8.2.1"
           }
         }
@@ -55,7 +55,7 @@
       "supabaseUrl": "https://jafhpkbtxcmzufznnbxc.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphZmhwa2J0eGNtenVmem5uYnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NjMxNjcsImV4cCI6MjA5MDQzOTE2N30.PruNINSYGjCwhsiZhcIFVJRX6ix0zJKQMIJKta3YlEM",
       "eas": {
-        "projectId": "549dc85e-1c20-42c1-8085-3d8bf9493547"
+        "projectId": "305ea159-744c-49ef-9da9-b5d9a52f6b61"
       }
     }
   }
