@@ -4851,17 +4851,17 @@ react-native-url-polyfill@^2.0.0:
   dependencies:
     whatwg-url-without-unicode "8.0.0-3"
 
-react-native-worklets-core@^1.6.3:
-  version "1.6.3"
-  resolved "https://registry.yarnpkg.com/react-native-worklets-core/-/react-native-worklets-core-1.6.3.tgz#e95d879b28890bf27f019797aa3d8538532b4f4e"
-  integrity sha512-r3Q40XQBccx/iAI5tlyiua+micvO1UGzzUOskNweZUXyfrrE+rb5aqxqruBPqXf90rO+bBiplylLMEAXCLTyGA==
+react-native-worklets-core@^2.0.0-beta.3:
+  version "2.0.0-beta.3"
+  resolved "https://registry.yarnpkg.com/react-native-worklets-core/-/react-native-worklets-core-2.0.0-beta.3.tgz#862411690acf0fdb4358df5efbbca5d1ca207475"
+  integrity sha512-V5L5CJvXsht9BYzhil5MNlBmUJtdlTrvybF31gLrKz8pZPEl0QgQPBan27uGnjtwF6zPd3ARNUPvqXGzYvllOw==
   dependencies:
     string-hash-64 "^1.0.3"
 
-"react-native-worklets@npm:react-native-worklets-core@^1.6.3":
-  version "1.6.3"
-  resolved "https://registry.yarnpkg.com/react-native-worklets-core/-/react-native-worklets-core-1.6.3.tgz#e95d879b28890bf27f019797aa3d8538532b4f4e"
-  integrity sha512-r3Q40XQBccx/iAI5tlyiua+micvO1UGzzUOskNweZUXyfrrE+rb5aqxqruBPqXf90rO+bBiplylLMEAXCLTyGA==
+"react-native-worklets@npm:react-native-worklets-core@2.0.0-beta.3":
+  version "2.0.0-beta.3"
+  resolved "https://registry.yarnpkg.com/react-native-worklets-core/-/react-native-worklets-core-2.0.0-beta.3.tgz#862411690acf0fdb4358df5efbbca5d1ca207475"
+  integrity sha512-V5L5CJvXsht9BYzhil5MNlBmUJtdlTrvybF31gLrKz8pZPEl0QgQPBan27uGnjtwF6zPd3ARNUPvqXGzYvllOw==
   dependencies:
     string-hash-64 "^1.0.3"
 

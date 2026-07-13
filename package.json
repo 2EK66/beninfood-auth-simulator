@@ -30,8 +30,8 @@
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
     "react-native-url-polyfill": "^2.0.0",
-    "react-native-worklets": "npm:react-native-worklets-core@^1.6.3",
-    "react-native-worklets-core": "^1.6.3"
+    "react-native-worklets": "npm:react-native-worklets-core@2.0.0-beta.3",
+    "react-native-worklets-core": "^2.0.0-beta.3"
   },
   "devDependencies": {
     "@babel/core": "^7.24.0",
