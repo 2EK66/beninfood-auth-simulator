@@ -1,9 +1,8 @@
-const expo = require("expo/metro-config");
-const config = expo.getDefaultConfig(__dirname);
+const { getDefaultConfig } = require("expo/metro-config");
 
-config.resolver = config.resolver || {};
-config.resolver.extraNodeModules = {
-  stream: require.resolve("stream-browserify")
-};
+const config = getDefaultConfig(__dirname);
+
+// Force Metro à utiliser les exports React Native des packages
+config.resolver.unstable_enablePackageExports = true;
 
 module.exports = config;
