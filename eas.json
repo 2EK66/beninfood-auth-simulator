@@ -15,18 +15,12 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "NODE_VERSION": "22.11.0"
       }
     },
     "production": {
       "distribution": "store",
       "android": {
         "buildType": "app-bundle"
-      },
-      "env": {
-        "NODE_VERSION": "22.11.0"
       }
     }
   }
