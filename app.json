@@ -5,7 +5,9 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "bj.beninfood.app",
@@ -53,6 +55,7 @@
       "eas": {
         "projectId": "bc13432e-7478-4fe9-87aa-16201c6bf818"
       }
-    }
+    },
+    "owner": "emm500"
   }
 }
