@@ -1,8 +1,5 @@
 const { getDefaultConfig } = require("expo/metro-config");
+const { withNativeWind } = require("nativewind/metro");
 
 const config = getDefaultConfig(__dirname);
-
-// Force Metro à utiliser les exports React Native des packages
-config.resolver.unstable_enablePackageExports = true;
-
-module.exports = config;
+module.exports = withNativeWind(config, { input: "./src/global.css" });

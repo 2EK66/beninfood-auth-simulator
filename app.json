@@ -1,14 +1,11 @@
 {
   "expo": {
     "name": "BéninFood",
-    "slug": "beacon-buddy-mobile",
+    "slug": "beninfood-8oiyb43gkws79k9ibdwf",
     "version": "1.0.0",
-    "newArchEnabled": true,
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "bj.beninfood.app",
@@ -42,20 +39,19 @@
             "targetSdkVersion": 35,
             "minSdkVersion": 24,
             "buildToolsVersion": "35.0.0",
-            "kotlinVersion": "2.1.20",
-            "newArchEnabled": true
+            "kotlinVersion": "1.9.24",
+            "agpVersion": "8.2.1"
           }
         }
-      ],
-      "expo-asset",
-      "expo-font"
+      ]
     ],
     "scheme": "beninfood",
+    "newArchEnabled": false,
     "extra": {
       "supabaseUrl": "https://jafhpkbtxcmzufznnbxc.supabase.co",
       "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImphZmhwa2J0eGNtenVmem5uYnhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4NjMxNjcsImV4cCI6MjA5MDQzOTE2N30.PruNINSYGjCwhsiZhcIFVJRX6ix0zJKQMIJKta3YlEM",
       "eas": {
-        "projectId": "91106eb4-273d-4f57-99cc-09e1e8e2a7a3"
+        "projectId": "549dc85e-1c20-42c1-8085-3d8bf9493547"
       }
     }
   }
