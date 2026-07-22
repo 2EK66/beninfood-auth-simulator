@@ -14,75 +14,170 @@ interface AuthResult {
   error?: string;
 }
 
-export async function signUp({ name, phone, password, role }: SignUpParams): Promise<AuthResult> {
-  const cleanPhone = sanitizePhone(phone);
-  const email = buildPhoneEmail(cleanPhone);
+export async function signUp({
+  name,
+  phone,
+  password,
+  role,
+}: SignUpParams): Promise<AuthResult> {
+  try {
+    const cleanPhone = sanitizePhone(phone);
+    const email = buildPhoneEmail(cleanPhone);
 
-  // Livreurs bloqués côté client aussi
-  if (role === "Livreur") {
+    console.log("========== SIGNUP ==========");
+    console.log({
+      email,
+      phone: cleanPhone,
+      role,
+    });
+
+    // Les livreurs sont créés uniquement par un administrateur
+    if (role === "Livreur") {
+      return {
+        success: false,
+        error:
+          "Les comptes Livreurs sont créés uniquement par l'administrateur BéninFood.",
+      };
+    }
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name: name.trim(), // correspond au trigger SQL
+          phone: cleanPhone,
+          role,
+        },
+      },
+    });
+
+    console.log("Réponse signUp :", { data, error });
+
+    if (error) {
+      console.error("Erreur Supabase :", error);
+
+      if (error.message.toLowerCase().includes("already")) {
+        return {
+          success: false,
+          error: "Ce numéro est déjà enregistré.",
+        };
+      }
+
+      return {
+        success: false,
+        error: error.message,
+      };
+    }
+
+    if (!data.user) {
+      return {
+        success: false,
+        error: "Impossible de créer le compte.",
+      };
+    }
+
+    /*
+     * IMPORTANT
+     *
+     * Le trigger SQL handle_new_user()
+     * crée automatiquement bf_profiles.
+     *
+     * On ne fait plus de upsert ici.
+     */
+
+    const profile = await getBfProfile(data.user.id);
+
+    if (!profile) {
+      return {
+        success: true,
+        user: {
+          id: data.user.id,
+          name: name.trim(),
+          phone: cleanPhone,
+          role,
+        },
+      };
+    }
+
+    return {
+      success: true,
+      user: profile,
+    };
+  } catch (e: any) {
+    console.error("Exception signUp :", e);
+
     return {
       success: false,
-      error: "Les comptes Livreurs sont créés uniquement par l'administrateur BéninFood.",
+      error: e?.message ?? "Une erreur inattendue est survenue.",
     };
   }
-
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: name.trim(),
-        phone: cleanPhone,
-        role,
-      },
-    },
-  });
-
-  if (error) {
-    if (error.message.includes("already registered")) {
-      return { success: false, error: "Ce numéro est déjà enregistré. Connectez-vous." };
-    }
-    return { success: false, error: error.message };
-  }
-
-  if (!data.user) return { success: false, error: "Échec de la création du compte." };
-
-  // Créer le profil BéninFood
-  const bfRole = role === "Gérant" ? "Gérant" : "Client";
-  await supabase.from("bf_profiles").upsert({
-    id: data.user.id,
-    name: name.trim(),
-    phone: cleanPhone,
-    role: bfRole,
-  });
-
-  return {
-    success: true,
-    user: { id: data.user.id, name: name.trim(), phone: cleanPhone, role: bfRole },
-  };
 }
 
-export async function signIn({ phone, password }: { phone: string; password: string }): Promise<AuthResult> {
-  const cleanPhone = sanitizePhone(phone);
-  const email = buildPhoneEmail(cleanPhone);
+export async function signIn({
+  phone,
+  password,
+}: {
+  phone: string;
+  password: string;
+}): Promise<AuthResult> {
+  try {
+    const cleanPhone = sanitizePhone(phone);
+    const email = buildPhoneEmail(cleanPhone);
 
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    console.log("========== SIGNIN ==========");
+    console.log(email);
 
-  if (error) {
-    if (error.message.includes("Invalid login credentials") || error.message.includes("invalid_credentials")) {
-      return { success: false, error: "Numéro ou mot de passe incorrect." };
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    console.log("Réponse signIn :", { data, error });
+
+    if (error) {
+      if (
+        error.message.includes("Invalid login credentials") ||
+        error.message.includes("invalid_credentials")
+      ) {
+        return {
+          success: false,
+          error: "Numéro ou mot de passe incorrect.",
+        };
+      }
+
+      return {
+        success: false,
+        error: error.message,
+      };
     }
-    return { success: false, error: error.message };
-  }
 
-  if (!data.user || !data.session) {
-    return { success: false, error: "Échec de la connexion." };
-  }
+    if (!data.user) {
+      return {
+        success: false,
+        error: "Connexion impossible.",
+      };
+    }
 
-  const profile = await getBfProfile(data.user.id);
-  if (!profile) {
-    return { success: false, error: "Profil introuvable. Contactez le support." };
-  }
+    const profile = await getBfProfile(data.user.id);
 
-  return { success: true, user: profile };
+    if (!profile) {
+      return {
+        success: false,
+        error: "Votre profil est introuvable.",
+      };
+    }
+
+    return {
+      success: true,
+      user: profile,
+    };
+  } catch (e: any) {
+    console.error("Exception signIn :", e);
+
+    return {
+      success: false,
+      error: e?.message ?? "Une erreur inattendue est survenue.",
+    };
+  }
 }
