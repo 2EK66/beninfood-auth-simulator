@@ -14,6 +14,27 @@ interface AuthResult {
   error?: string;
 }
 
+/**
+ * Attend que le trigger SQL ait créé le profil.
+ */
+async function waitForProfile(
+  userId: string,
+  retries = 10,
+  delay = 500
+): Promise<BfProfile | null> {
+  for (let i = 0; i < retries; i++) {
+    const profile = await getBfProfile(userId);
+
+    if (profile) {
+      return profile;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, delay));
+  }
+
+  return null;
+}
+
 export async function signUp({
   name,
   phone,
@@ -31,7 +52,6 @@ export async function signUp({
       role,
     });
 
-    // Les livreurs sont créés uniquement par un administrateur
     if (role === "Livreur") {
       return {
         success: false,
@@ -45,17 +65,22 @@ export async function signUp({
       password,
       options: {
         data: {
-          name: name.trim(), // correspond au trigger SQL
+          name: name.trim(),
           phone: cleanPhone,
           role,
         },
       },
     });
 
-    console.log("Réponse signUp :", { data, error });
+    console.log("========== RÉPONSE SUPABASE ==========");
+    console.log({
+      user: data.user?.id,
+      session: !!data.session,
+      error,
+    });
 
     if (error) {
-      console.error("Erreur Supabase :", error);
+      console.error(error);
 
       if (error.message.toLowerCase().includes("already")) {
         return {
@@ -77,18 +102,12 @@ export async function signUp({
       };
     }
 
-    /*
-     * IMPORTANT
-     *
-     * Le trigger SQL handle_new_user()
-     * crée automatiquement bf_profiles.
-     *
-     * On ne fait plus de upsert ici.
-     */
-
-    const profile = await getBfProfile(data.user.id);
+    // Attendre que le trigger SQL crée bf_profiles
+    const profile = await waitForProfile(data.user.id);
 
     if (!profile) {
+      console.warn("Le profil n'a pas encore été créé.");
+
       return {
         success: true,
         user: {
@@ -96,7 +115,7 @@ export async function signUp({
           name: name.trim(),
           phone: cleanPhone,
           role,
-        },
+        } as BfProfile,
       };
     }
 
@@ -133,7 +152,12 @@ export async function signIn({
       password,
     });
 
-    console.log("Réponse signIn :", { data, error });
+    console.log("========== RÉPONSE SUPABASE ==========");
+    console.log({
+      user: data.user?.id,
+      session: !!data.session,
+      error,
+    });
 
     if (error) {
       if (
@@ -159,12 +183,13 @@ export async function signIn({
       };
     }
 
-    const profile = await getBfProfile(data.user.id);
+    const profile = await waitForProfile(data.user.id);
 
     if (!profile) {
       return {
         success: false,
-        error: "Votre profil est introuvable.",
+        error:
+          "Votre profil est en cours de création. Réessayez dans quelques secondes.",
       };
     }
 
