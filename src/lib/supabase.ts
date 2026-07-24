@@ -77,7 +77,7 @@ export function sanitizePhone(phone: string): string {
 export function buildPhoneEmail(phone: string): string {
   const clean = sanitizePhone(phone);
 
-  return `${clean}@beninfood.app`;
+  return `${clean}@beninfood.bj`;
 }
 
 /* ===========================
@@ -85,16 +85,30 @@ export function buildPhoneEmail(phone: string): string {
 =========================== */
 
 export async function getBfProfile(userId: string) {
-  const { data, error } = await supabase
-    .from("bf_profiles")
-    .select("*")
-    .eq("id", userId)
-    .single();
+  try {
+    console.log("Recherche du profil :", userId);
 
-  if (error) {
-    console.log("Erreur getBfProfile :", error.message);
+    const { data, error } = await supabase
+      .from("bf_profiles")
+      .select("*")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Erreur getBfProfile :", error);
+      return null;
+    }
+
+    if (!data) {
+      console.log("Aucun profil trouvé.");
+      return null;
+    }
+
+    console.log("Profil trouvé :", data);
+
+    return data;
+  } catch (e) {
+    console.error("Exception getBfProfile :", e);
     return null;
   }
-
-  return data;
 }
