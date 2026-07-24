@@ -1,5 +1,5 @@
 import { Tabs } from "expo-router";
-import { LayoutDashboard, UtensilsCrossed, Wallet } from "lucide-react-native";
+import { LayoutDashboard, UtensilsCrossed, Wallet, Calendar } from "lucide-react-native";
 
 export default function GerantLayout() {
   return (
@@ -22,6 +22,13 @@ export default function GerantLayout() {
         options={{
           title: "Tableau",
           tabBarIcon: ({ color }) => <LayoutDashboard size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="reservation"
+        options={{
+          title: "Réservations",
+          tabBarIcon: ({ color }) => <Calendar size={22} color={color} />,
         }}
       />
       <Tabs.Screen
