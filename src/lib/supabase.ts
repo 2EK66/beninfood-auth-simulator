@@ -77,7 +77,7 @@ export function sanitizePhone(phone: string): string {
 export function buildPhoneEmail(phone: string): string {
   const clean = sanitizePhone(phone);
 
-  return `${clean}@beninfood.bj`;
+  return `${clean}@beninfood.app`;
 }
 
 /* ===========================
