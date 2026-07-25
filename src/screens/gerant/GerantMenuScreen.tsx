@@ -4,7 +4,8 @@ import {
   SafeAreaView, StatusBar, ActivityIndicator, Alert,
   KeyboardAvoidingView, Platform, Image,
 } from "react-native";
-import { Plus, Trash2, Check, ChefHat, RefreshCw, Store } from "lucide-react-native";
+import { Plus, Trash2, ChefHat, RefreshCw, Store, Camera, Clock, Edit3, X } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
 import { BfProfile, BfRestaurant, BfMenuItem } from "../../types";
 
@@ -22,6 +23,10 @@ export default function GerantMenuScreen({ user }: Props) {
   const [menu, setMenu] = useState<BfMenuItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  // Édition d'un plat (null = mode création, ID = mode modification)
+  const [editingId, setEditingId] = useState<string | number | null>(null);
 
   // Formulaire profil restaurant
   const [restForm, setRestForm] = useState({ name: "", location: "", phone: "" });
@@ -32,26 +37,95 @@ export default function GerantMenuScreen({ user }: Props) {
   const [selectedImage, setSelectedImage] = useState(FOOD_PRESETS[0].url);
 
   const fetchData = async () => {
-    const { data: rest } = await supabase
-      .from("bf_restaurants")
-      .select("*")
-      .eq("owner_id", user.id)
-      .single();
-    setRestaurant(rest);
-
-    if (rest) {
-      const { data: items } = await supabase
-        .from("bf_menu_du_jour")
+    try {
+      const { data: rest } = await supabase
+        .from("bf_restaurants")
         .select("*")
-        .eq("restaurant_id", rest.id)
-        .eq("is_available", true)
-        .order("created_at", { ascending: false });
-      setMenu(items || []);
+        .eq("owner_id", user.id)
+        .maybeSingle();
+
+      setRestaurant(rest);
+
+      if (rest) {
+        // FILTRE PAR EXPIRATION : uniquement les plats encore valides
+        const nowIso = new Date().toISOString();
+
+        const { data: items } = await supabase
+          .from("bf_menu_du_jour")
+          .select("*")
+          .eq("restaurant_id", rest.id)
+          .eq("is_available", true)
+          .gt("expires_at", nowIso) // WHERE expires_at > NOW()
+          .order("created_at", { ascending: false });
+
+        setMenu(items || []);
+      }
+    } catch (err: any) {
+      console.error("Erreur chargement menu:", err.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  // 1. Sélection d'image via Expo Image Picker (Natif Mobile)
+  const handlePickImage = async () => {
+    if (!restaurant) return;
+
+    // Demande de permission
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert("Permission refusée", "Nous avons besoin de la permission pour accéder à vos photos.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]?.uri) {
+      const uri = result.assets[0].uri;
+      await uploadImageToSupabase(uri);
+    }
+  };
+
+  const uploadImageToSupabase = async (uri: string) => {
+    if (!restaurant) return;
+    setUploading(true);
+
+    try {
+      const fileExt = uri.split('.').pop() || 'jpg';
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `menu/${restaurant.id}/${fileName}`;
+
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        name: fileName,
+        type: `image/${fileExt === 'png' ? 'png' : 'jpeg'}`,
+      } as any);
+
+      const { error: uploadError } = await supabase.storage
+        .from("menu-images")
+        .upload(filePath, formData);
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from("menu-images")
+        .getPublicUrl(filePath);
+
+      setSelectedImage(publicUrlData.publicUrl);
+    } catch (err: any) {
+      Alert.alert("Erreur upload", err.message || "Impossible de charger la photo.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleCreateRestaurant = async () => {
     if (!restForm.name.trim() || !restForm.location.trim()) {
@@ -73,26 +147,67 @@ export default function GerantMenuScreen({ user }: Props) {
     await fetchData();
   };
 
-  const handleAddPlat = async () => {
+  // 3. Sauvegarde (Création OU Modification)
+  const handleSavePlat = async () => {
     if (!restaurant) return;
     if (!form.name.trim()) { Alert.alert("Champ requis", "Nom du plat obligatoire."); return; }
     const price = parseFloat(form.price);
     if (isNaN(price) || price <= 0) { Alert.alert("Prix invalide", "Entrez un prix valide."); return; }
 
     setSaving(true);
-    const { error } = await supabase.from("bf_menu_du_jour").insert({
-      restaurant_id: restaurant.id,
-      dish_name: form.name.trim(),
-      price,
-      description: form.desc.trim() || null,
-      image_url: selectedImage,
-      is_available: true,
-    });
-    setSaving(false);
-    if (error) { Alert.alert("Erreur", error.message); return; }
-    setForm({ name: "", price: "", desc: "" });
-    Alert.alert("✅ Plat publié !", `"${form.name}" est maintenant visible par les clients.`);
+
+    if (editingId) {
+      // MODE MODIFICATION
+      const { error } = await supabase
+        .from("bf_menu_du_jour")
+        .update({
+          dish_name: form.name.trim(),
+          price,
+          description: form.desc.trim() || null,
+          image_url: selectedImage,
+        })
+        .eq("id", editingId);
+
+      setSaving(false);
+      if (error) { Alert.alert("Erreur", error.message); return; }
+      Alert.alert("✅ Plat modifié !", `"${form.name}" a été mis à jour.`);
+    } else {
+      // MODE CRÉATION (expires_at = NOW + 24H)
+      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+      const { error } = await supabase.from("bf_menu_du_jour").insert({
+        restaurant_id: restaurant.id,
+        dish_name: form.name.trim(),
+        price,
+        description: form.desc.trim() || null,
+        image_url: selectedImage,
+        is_available: true,
+        expires_at: expiresAt,
+      });
+
+      setSaving(false);
+      if (error) { Alert.alert("Erreur", error.message); return; }
+      Alert.alert("✅ Plat publié !", `"${form.name}" est visible pendant 24H.`);
+    }
+
+    resetForm();
     await fetchData();
+  };
+
+  const handleEditClick = (item: BfMenuItem) => {
+    setEditingId(item.id);
+    setForm({
+      name: item.dish_name,
+      price: String(item.price),
+      desc: item.description || "",
+    });
+    if (item.image_url) setSelectedImage(item.image_url);
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setForm({ name: "", price: "", desc: "" });
+    setSelectedImage(FOOD_PRESETS[0].url);
   };
 
   const handleRemovePlat = async (item: BfMenuItem) => {
@@ -137,12 +252,11 @@ export default function GerantMenuScreen({ user }: Props) {
               {/* Header */}
               <View className="mb-5">
                 <Text className="text-[10px] font-bold text-[#fcd116] uppercase tracking-widest">
-                  Gestion du menu
+                  Gestion du menu du jour
                 </Text>
-                <Text className="text-2xl font-black text-white mt-1">Mon Menu</Text>
+                <Text className="text-2xl font-black text-white mt-1">Mon Menu (24h)</Text>
               </View>
 
-              {/* Si pas de restaurant → formulaire création */}
               {!restaurant ? (
                 <View className="bg-[#0d1a12] border border-[#fcd116]/20 rounded-2xl p-5 mb-5">
                   <View className="flex-row items-center gap-2 mb-1">
@@ -152,7 +266,7 @@ export default function GerantMenuScreen({ user }: Props) {
                     </Text>
                   </View>
                   <Text className="text-xs text-white/40 mb-4">
-                    Enregistrez votre établissement pour commencer à publier votre menu.
+                    Enregistrez votre établissement pour commencer.
                   </Text>
                   {[
                     { label: "Nom du restaurant *", key: "name", placeholder: "ex: Chez Tanti Sika" },
@@ -195,13 +309,20 @@ export default function GerantMenuScreen({ user }: Props) {
                     </View>
                   </View>
 
-                  {/* Formulaire ajout plat */}
+                  {/* Formulaire ajout / édition plat */}
                   <View className="bg-[#0d1a12] border border-[#1a2e1f] rounded-2xl p-5 mb-5">
-                    <View className="flex-row items-center gap-2 mb-4">
-                      <ChefHat size={16} color="#fcd116" />
-                      <Text className="text-sm font-black text-[#fcd116] uppercase tracking-wider">
-                        Publier un plat
-                      </Text>
+                    <View className="flex-row items-center justify-between mb-4">
+                      <View className="flex-row items-center gap-2">
+                        <ChefHat size={16} color="#fcd116" />
+                        <Text className="text-sm font-black text-[#fcd116] uppercase tracking-wider">
+                          {editingId ? "Modifier le plat" : "Publier un plat (24h)"}
+                        </Text>
+                      </View>
+                      {editingId && (
+                        <TouchableOpacity onPress={resetForm} className="p-1">
+                          <X size={18} color="rgba(255,255,255,0.5)" />
+                        </TouchableOpacity>
+                      )}
                     </View>
 
                     <View className="mb-3">
@@ -240,9 +361,26 @@ export default function GerantMenuScreen({ user }: Props) {
                       />
                     </View>
 
-                    {/* Presets images */}
+                    {/* Sélection photo */}
                     <View className="mb-4">
-                      <Text className="text-[10px] font-bold text-white/40 uppercase mb-2">Photo du plat</Text>
+                      <View className="flex-row justify-between items-center mb-2">
+                        <Text className="text-[10px] font-bold text-white/40 uppercase">Photo du plat</Text>
+                        <TouchableOpacity
+                          onPress={handlePickImage}
+                          disabled={uploading}
+                          className="flex-row items-center gap-1 bg-amber-500/10 border border-amber-500/30 px-2 py-1 rounded-lg"
+                        >
+                          {uploading ? (
+                            <ActivityIndicator size="small" color="#fcd116" />
+                          ) : (
+                            <>
+                              <Camera size={12} color="#fcd116" />
+                              <Text className="text-[#fcd116] text-[10px] font-bold">Choisir une photo</Text>
+                            </>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+
                       <View className="flex-row gap-2">
                         {FOOD_PRESETS.map(p => (
                           <TouchableOpacity
@@ -252,11 +390,7 @@ export default function GerantMenuScreen({ user }: Props) {
                               selectedImage === p.url ? "border-[#fcd116]" : "border-transparent"
                             }`}
                           >
-                            <Image
-                              source={{ uri: p.url }}
-                              className="w-full h-14"
-                              resizeMode="cover"
-                            />
+                            <Image source={{ uri: p.url }} className="w-full h-14" resizeMode="cover" />
                             <Text className="text-[9px] text-center text-white/60 py-1 bg-[#0d1a12]">
                               {p.name}
                             </Text>
@@ -266,21 +400,21 @@ export default function GerantMenuScreen({ user }: Props) {
                     </View>
 
                     <TouchableOpacity
-                      onPress={handleAddPlat}
+                      onPress={handleSavePlat}
                       disabled={saving}
-                      className="bg-emerald-500 rounded-xl py-3 flex-row items-center justify-center gap-2"
+                      className={`${editingId ? "bg-amber-500" : "bg-emerald-500"} rounded-xl py-3 flex-row items-center justify-center gap-2`}
                     >
                       <Plus size={16} color="white" />
                       <Text className="text-sm font-black text-white">
-                        {saving ? "Publication…" : "Publier au menu du jour"}
+                        {saving ? "Sauvegarde..." : editingId ? "Enregistrer les modifications" : "Publier au menu du jour"}
                       </Text>
                     </TouchableOpacity>
                   </View>
 
-                  {/* Titre liste */}
+                  {/* En-tête de liste */}
                   <View className="flex-row items-center justify-between mb-3">
                     <Text className="text-sm font-black text-white">
-                      Menu actif ({menu.length})
+                      Menu en cours ({menu.length})
                     </Text>
                     <TouchableOpacity onPress={fetchData}>
                       <RefreshCw size={16} color="rgba(255,255,255,0.3)" />
@@ -291,7 +425,7 @@ export default function GerantMenuScreen({ user }: Props) {
             </View>
           }
           renderItem={({ item }) => (
-            <View className="bg-[#0d1a12] border border-[#1a2e1f] rounded-2xl p-4 mb-3 flex-row gap-3">
+            <View className="bg-[#0d1a12] border border-[#1a2e1f] rounded-2xl p-4 mb-3 flex-row gap-3 items-center">
               {item.image_url && (
                 <Image
                   source={{ uri: item.image_url }}
@@ -308,24 +442,45 @@ export default function GerantMenuScreen({ user }: Props) {
                     {item.description}
                   </Text>
                 )}
-                <Text className="text-sm font-black text-[#fcd116] mt-1">
-                  {Number(item.price).toLocaleString("fr-FR")} FCFA
-                </Text>
+                <View className="flex-row items-center gap-2 mt-1">
+                  <Text className="text-sm font-black text-[#fcd116]">
+                    {Number(item.price).toLocaleString("fr-FR")} FCFA
+                  </Text>
+                  {item.expires_at && (
+                    <View className="flex-row items-center gap-1 bg-white/5 px-2 py-0.5 rounded-full">
+                      <Clock size={10} color="rgba(255,255,255,0.4)" />
+                      <Text className="text-[9px] text-white/40 font-mono">
+                        Exp. {new Date(item.expires_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </View>
-              <TouchableOpacity
-                onPress={() => handleRemovePlat(item)}
-                className="p-2 bg-red-500/10 rounded-xl border border-red-500/20 self-center"
-              >
-                <Trash2 size={16} color="#f87171" />
-              </TouchableOpacity>
+
+              {/* Boutons d'action : Modifier et Supprimer */}
+              <View className="flex-row gap-2">
+                <TouchableOpacity
+                  onPress={() => handleEditClick(item)}
+                  className="p-2 bg-amber-500/10 rounded-xl border border-amber-500/20"
+                >
+                  <Edit3 size={16} color="#fcd116" />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => handleRemovePlat(item)}
+                  className="p-2 bg-red-500/10 rounded-xl border border-red-500/20"
+                >
+                  <Trash2 size={16} color="#f87171" />
+                </TouchableOpacity>
+              </View>
             </View>
           )}
           ListEmptyComponent={
             restaurant ? (
               <View className="items-center py-8">
                 <ChefHat size={32} color="rgba(255,255,255,0.1)" />
-                <Text className="text-sm text-white/30 mt-3">Aucun plat publié</Text>
-                <Text className="text-xs text-white/20 mt-1">Utilisez le formulaire ci-dessus</Text>
+                <Text className="text-sm text-white/30 mt-3">Aucun plat actif au menu</Text>
+                <Text className="text-xs text-white/20 mt-1">Les plats s'effacent automatiquement après leur date d'expiration.</Text>
               </View>
             ) : null
           }
