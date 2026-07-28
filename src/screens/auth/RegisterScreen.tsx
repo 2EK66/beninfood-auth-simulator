@@ -4,12 +4,10 @@ import {
   ScrollView, StatusBar,
   KeyboardAvoidingView, Platform, ActivityIndicator,
 } from "react-native";
-// ✅ Import SafeAreaView depuis le bon package pour éviter le Warning
 import { SafeAreaView } from "react-native-safe-area-context"; 
-// ✅ Tous les imports d'icônes sont regroupés proprement ici
 import {
   Phone, Lock, User, ArrowRight, ShoppingBag,
-  Utensils, Check, Bike, Eye, EyeOff
+  Utensils, Check, Bike, Eye, EyeOff, CheckCircle2, LogIn
 } from "lucide-react-native";
 import { signUp } from "../../lib/auth";
 import { UserRole } from "../../types";
@@ -39,22 +37,35 @@ export default function RegisterScreen({ onToggle }: Props) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState(""); // ✅ Champ de confirmation
   const [role, setRole] = useState<UserRole>("Client");
   const [showPw, setShowPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false); // ✅ Visibilité masquer/afficher
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
 
   const handleRegister = async () => {
     setError("");
+    setSuccess(false);
+
     if (!name.trim()) return setError("Le nom complet est requis.");
     if (!phone.trim()) return setError("Le numéro de téléphone est requis.");
     if (password.length < 6) return setError("Mot de passe : minimum 6 caractères.");
+    if (password !== confirmPassword) return setError("Les mots de passe ne correspondent pas."); // ✅ Validation
 
     setLoading(true);
     const result = await signUp({ name, phone, password, role });
     setLoading(false);
 
-    if (!result.success) setError(result.error || "Échec de l'inscription.");
+    if (result.success) {
+      setSuccess(true);
+      setTimeout(() => {
+        onToggle();
+      }, 2500);
+    } else {
+      setError(result.error || "Échec de l'inscription.");
+    }
   };
 
   return (
@@ -85,7 +96,22 @@ export default function RegisterScreen({ onToggle }: Props) {
           <View className="bg-bf-card border border-bf-border rounded-3xl p-6">
             <Text className="text-lg font-black text-white mb-5">Créer un compte</Text>
 
-            {/* Erreur */}
+            {/* Message de succès */}
+            {success && (
+              <View className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-4 mb-5 flex-row items-start gap-x-3">
+                <CheckCircle2 size={20} color="#34d399" style={{ marginTop: 2 }} />
+                <View className="flex-1">
+                  <Text className="text-emerald-400 font-bold text-sm mb-1">
+                    Compte créé avec succès !
+                  </Text>
+                  <Text className="text-emerald-200/80 text-xs leading-relaxed">
+                    Veuillez maintenant <Text className="font-bold underline">vous connecter</Text> avec vos identifiants. Redirection en cours...
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* Message d'erreur */}
             {error ? (
               <View className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3 mb-4">
                 <Text className="text-red-300 text-xs font-semibold">{error}</Text>
@@ -102,6 +128,7 @@ export default function RegisterScreen({ onToggle }: Props) {
                   <TouchableOpacity
                     key={r.id}
                     onPress={() => setRole(r.id)}
+                    disabled={success}
                     activeOpacity={0.8}
                     className="flex-row items-center p-4 rounded-2xl border-2"
                     style={{
@@ -153,6 +180,7 @@ export default function RegisterScreen({ onToggle }: Props) {
                   placeholderTextColor="#94A3B8"
                   value={name}
                   onChangeText={setName}
+                  editable={!success}
                   className="flex-1 text-white text-sm font-semibold ml-3"
                   autoComplete="name"
                 />
@@ -174,6 +202,7 @@ export default function RegisterScreen({ onToggle }: Props) {
                   keyboardType="phone-pad"
                   value={phone}
                   onChangeText={setPhone}
+                  editable={!success}
                   className="flex-1 text-white text-sm font-semibold"
                   autoComplete="tel"
                 />
@@ -181,7 +210,7 @@ export default function RegisterScreen({ onToggle }: Props) {
             </View>
 
             {/* Mot de passe */}
-            <View className="mb-6">
+            <View className="mb-4">
               <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
                 Mot de passe
               </Text>
@@ -193,6 +222,7 @@ export default function RegisterScreen({ onToggle }: Props) {
                   secureTextEntry={!showPw}
                   value={password}
                   onChangeText={setPassword}
+                  editable={!success}
                   className="flex-1 text-white text-sm font-semibold mx-3"
                 />
                 <TouchableOpacity onPress={() => setShowPw(!showPw)}>
@@ -204,24 +234,63 @@ export default function RegisterScreen({ onToggle }: Props) {
               </View>
             </View>
 
-            {/* Bouton */}
-            <TouchableOpacity
-              onPress={handleRegister}
-              disabled={loading}
-              activeOpacity={0.85}
-              style={{ backgroundColor: "#fcd116" }}
-              className="w-full py-4 rounded-2xl flex-row items-center justify-center"
-            >
-              {loading
-                ? <ActivityIndicator size="small" color="#001f13" />
-                : <>
+            {/* ✅ Confirmer le mot de passe */}
+            <View className="mb-6">
+              <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
+                Confirmer le mot de passe
+              </Text>
+              <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+                <Lock size={16} color="#94A3B8" />
+                <TextInput
+                  placeholder="Répétez le mot de passe"
+                  placeholderTextColor="#94A3B8"
+                  secureTextEntry={!showConfirmPw}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  editable={!success}
+                  className="flex-1 text-white text-sm font-semibold mx-3"
+                />
+                <TouchableOpacity onPress={() => setShowConfirmPw(!showConfirmPw)}>
+                  {showConfirmPw
+                    ? <EyeOff size={16} color="#94A3B8" />
+                    : <Eye size={16} color="#94A3B8" />
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Bouton d'action */}
+            {success ? (
+              <TouchableOpacity
+                onPress={onToggle}
+                activeOpacity={0.85}
+                className="w-full py-4 rounded-2xl flex-row items-center justify-center bg-emerald-500"
+              >
+                <LogIn size={18} color="#001f13" />
+                <Text className="text-bf-dark font-black text-base ml-2">
+                  Passer à la connexion
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={handleRegister}
+                disabled={loading}
+                activeOpacity={0.85}
+                style={{ backgroundColor: "#fcd116" }}
+                className="w-full py-4 rounded-2xl flex-row items-center justify-center"
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#001f13" />
+                ) : (
+                  <>
                     <Text className="text-bf-dark font-black text-base mr-2">
                       S'inscrire sur BéninFood
                     </Text>
                     <ArrowRight size={16} color="#001f13" />
                   </>
-              }
-            </TouchableOpacity>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Lien connexion */}
@@ -234,7 +303,7 @@ export default function RegisterScreen({ onToggle }: Props) {
             </TouchableOpacity>
           </View>
 
-          {/* Drapeau du Bénin miniature en bas, magnifique 🇧🇯 */}
+          {/* Drapeau du Bénin miniature */}
           <View className="flex-row mx-auto w-20 h-1 rounded-full overflow-hidden">
             <View className="flex-1 bg-emerald-500" />
             <View style={{ flex: 1, backgroundColor: "#fcd116" }} />
