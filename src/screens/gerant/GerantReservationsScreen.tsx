@@ -51,23 +51,26 @@ export default function GerantReservationsScreen({ user }: Props) {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"all" | "pending" | "confirmed" | "cancelled" | "completed">("pending");
 
-  // Identifiant du restaurant du gérant (ex: user.restaurant_id)
+  // Identifiant du restaurant du gérant
   const restaurantId = user.restaurant_id;
 
-  // 1. Chargement des données avec jointure Client
+  // 1. Chargement des données avec jointure sur bf_profiles
   const fetchReservations = useCallback(async () => {
     if (!restaurantId) {
       setLoading(false);
+      setRefreshing(false);
       return;
     }
 
     try {
       setLoading(true);
+
       let query = supabase
         .from("bf_reservations")
         .select(`
           *,
-          client:client_id (
+          bf_profiles:client_id (
+            name,
             full_name,
             phone
           )
@@ -81,7 +84,19 @@ export default function GerantReservationsScreen({ user }: Props) {
 
       const { data, error } = await query;
       if (error) throw error;
-      setReservations((data as unknown as Reservation[]) || []);
+
+      // Normalisation des données pour le mapping du client
+      const formattedReservations: Reservation[] = (data || []).map((item: any) => ({
+        ...item,
+        client: item.bf_profiles
+          ? {
+              full_name: item.bf_profiles.full_name || item.bf_profiles.name || "Client",
+              phone: item.bf_profiles.phone || null,
+            }
+          : null,
+      }));
+
+      setReservations(formattedReservations);
     } catch (err: any) {
       console.error("Erreur chargement réservations:", err.message);
     } finally {
@@ -97,7 +112,7 @@ export default function GerantReservationsScreen({ user }: Props) {
     if (!restaurantId) return;
 
     const channel = supabase
-      .channel("gerant_reservations_changes")
+      .channel(`gerant_reservations_${restaurantId}`)
       .on(
         "postgres_changes",
         {
@@ -107,7 +122,6 @@ export default function GerantReservationsScreen({ user }: Props) {
           filter: `restaurant_id=eq.${restaurantId}`,
         },
         () => {
-          // Recharge la liste en direct lorsqu'une réservation change/arrive
           fetchReservations();
         }
       )
@@ -118,7 +132,7 @@ export default function GerantReservationsScreen({ user }: Props) {
     };
   }, [restaurantId, fetchReservations]);
 
-  // 3. Action de modification avec confirmation (Alert)
+  // 3. Action de modification de statut
   const handleUpdateStatus = (id: string, newStatus: "confirmed" | "cancelled" | "completed", label: string) => {
     Alert.alert(
       "Confirmation",
@@ -157,7 +171,7 @@ export default function GerantReservationsScreen({ user }: Props) {
     Linking.openURL(`tel:${phoneNumber}`);
   };
 
-  // Calcul des statistiques rapides
+  // Statistiques rapides
   const stats = {
     pending: reservations.filter((r) => r.status === "pending").length,
     confirmed: reservations.filter((r) => r.status === "confirmed").length,
@@ -216,7 +230,7 @@ export default function GerantReservationsScreen({ user }: Props) {
           </View>
         </View>
 
-        {/* Note particulière du client */}
+        {/* Note du client */}
         {item.note ? (
           <View className="bg-black/20 p-2.5 rounded-xl mb-3 flex-row items-start gap-x-2">
             <FileText size={14} color="#94A3B8" style={{ marginTop: 2 }} />
@@ -226,7 +240,6 @@ export default function GerantReservationsScreen({ user }: Props) {
 
         {/* Actions Rapides */}
         <View className="flex-row gap-x-2 mt-1">
-          {/* Bouton Appeler toujours disponible si un téléphone est configuré */}
           <TouchableOpacity
             onPress={() => makePhoneCall(clientPhone)}
             className="bg-white/10 border border-white/10 p-2.5 rounded-xl items-center justify-center"
@@ -234,7 +247,6 @@ export default function GerantReservationsScreen({ user }: Props) {
             <Phone size={16} color="#ffffff" />
           </TouchableOpacity>
 
-          {/* Actions conditionnelles selon statut */}
           {item.status === "pending" && (
             <>
               <TouchableOpacity
@@ -273,13 +285,13 @@ export default function GerantReservationsScreen({ user }: Props) {
     <SafeAreaView className="flex-1 bg-bf-dark">
       <StatusBar barStyle="light-content" backgroundColor="#001f13" />
 
-      {/* Titre */}
+      {/* En-tête */}
       <View className="px-5 pt-4 pb-3 border-b border-bf-border">
         <Text className="text-xl font-black text-white">Réservations du Restaurant</Text>
         <Text className="text-white/40 text-xs mt-0.5">Suivi en direct des tables réservées</Text>
       </View>
 
-      {/* Dashboard Statistiques en Haut */}
+      {/* Dashboard Statistiques */}
       <View className="flex-row px-5 py-3 gap-x-2">
         <View className="flex-1 bg-amber-500/10 border border-amber-500/20 rounded-2xl p-2.5 items-center">
           <Text className="text-amber-400 font-black text-base">{stats.pending}</Text>
@@ -295,7 +307,7 @@ export default function GerantReservationsScreen({ user }: Props) {
         </View>
       </View>
 
-      {/* Filtres de liste */}
+      {/* Filtres */}
       <View className="flex-row px-5 pb-3 gap-x-2">
         {[
           { key: "pending", label: "En attente" },
