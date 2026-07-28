@@ -1,18 +1,19 @@
 import React, { useState, useEffect } from "react";
 import {
-  View, Text, TouchableOpacity, FlatList,
+  View, Text, TouchableOpacity,
   TextInput, Image, ScrollView, SafeAreaView,
-  StatusBar, RefreshControl, ActivityIndicator, Modal, Alert,
+  StatusBar, RefreshControl, ActivityIndicator,
 } from "react-native";
 import {
   Search, MapPin, Star, ShoppingBag, Bell,
-  LogOut, Utensils, Plus, SlidersHorizontal, X, Phone, CheckCircle2,
+  LogOut, Utensils, Plus, SlidersHorizontal,
 } from "lucide-react-native";
 import { supabase, signOutUser } from "../../lib/supabase";
 import { BfProfile, BfRestaurant, BfMenuItem, CartItem } from "../../types";
 
 interface Props {
   user: BfProfile;
+  navigation?: any; // Pour React Navigation / Bottom Tabs
 }
 
 const CATEGORIES = ["Tous", "Maquis 🇧🇯", "Grillades", "Fast-Food", "Pâtisseries"];
@@ -24,7 +25,7 @@ const FALLBACK_RESTAURANTS: BfRestaurant[] = [
   { id: "4", owner_id: "", name: "Dany Fast-Food", location: "Cotonou, Zongo", phone: null, category: "Fast-Food", rating: 4.3, image_url: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&auto=format&fit=crop&q=60", description: "Burgers avec frites d'igname locale.", created_at: "" },
 ];
 
-export default function HomeScreen({ user }: Props) {
+export default function HomeScreen({ user, navigation }: Props) {
   const [restaurants, setRestaurants] = useState<BfRestaurant[]>(FALLBACK_RESTAURANTS);
   const [menuItems, setMenuItems] = useState<BfMenuItem[]>([]);
   const [search, setSearch] = useState("");
@@ -32,15 +33,6 @@ export default function HomeScreen({ user }: Props) {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
-  // État du Modal de confirmation de commande
-  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
-  const [submittingOrder, setSubmittingOrder] = useState(false);
-
-  // Formulaire de livraison
-  const [deliveryAddress, setDeliveryAddress] = useState("");
-  const [phone, setPhone] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState<"MTN" | "MOOV" | "CASH">("MTN");
 
   const fetchData = async () => {
     setLoading(true);
@@ -78,45 +70,11 @@ export default function HomeScreen({ user }: Props) {
     return matchSearch && matchCat;
   });
 
-  // Soumission finale de la commande
-  const handleConfirmOrder = async () => {
-    if (!deliveryAddress.trim() || !phone.trim()) {
-      Alert.alert("Champs manquants", "Veuillez renseigner votre adresse de livraison et numéro de téléphone.");
-      return;
-    }
-
-    setSubmittingOrder(true);
-    try {
-      const orderPayload = {
-        user_id: user.id,
-        items: cart,
-        total_price: cartTotal,
-        delivery_address: deliveryAddress.trim(),
-        phone: phone.trim(),
-        payment_method: paymentMethod,
-        status: "pending",
-      };
-
-      const { error } = await supabase.from("bf_orders").insert(orderPayload);
-
-      if (error) {
-        console.warn("Table bf_orders non prête ou erreur RLS:", error.message);
-      }
-
-      setSubmittingOrder(false);
-      setIsCheckoutModalOpen(false);
-      setCart([]);
-      setDeliveryAddress("");
-      setPhone("");
-
-      Alert.alert(
-        "🎉 Commande envoyée !",
-        `Votre commande de ${cartTotal.toLocaleString("fr-FR")} FCFA a été transmise avec succès. Le livreur vous contactera au ${phone}.`,
-        [{ text: "Parfait !" }]
-      );
-    } catch (err: any) {
-      setSubmittingOrder(false);
-      Alert.alert("Erreur", err.message || "Impossible de valider la commande.");
+  // Action du bouton "Commander" : Redirection vers l'écran CommandeScreen
+  const handleGoToCommande = () => {
+    if (navigation) {
+      // Redirige vers l'onglet/écran de commande avec le panier et l'étape "checkout"
+      navigation.navigate("Commande", { initialCart: cart, initialStep: "checkout" });
     }
   };
 
@@ -306,7 +264,7 @@ export default function HomeScreen({ user }: Props) {
           </View>
           
           <TouchableOpacity
-            onPress={() => setIsCheckoutModalOpen(true)}
+            onPress={handleGoToCommande}
             activeOpacity={0.8}
             className="flex-row items-center px-4 py-2 rounded-xl gap-x-1.5"
             style={{ backgroundColor: "#fcd116" }}
@@ -315,142 +273,6 @@ export default function HomeScreen({ user }: Props) {
           </TouchableOpacity>
         </View>
       )}
-
-      {/* Modal / Formulaire de confirmation de commande */}
-      <Modal
-        visible={isCheckoutModalOpen}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setIsCheckoutModalOpen(false)}
-      >
-        <View className="flex-1 bg-black/80 justify-end">
-          <View className="bg-[#0a0f0d] border-t border-[#1a2e1f] rounded-t-3xl p-5 max-h-[90%]">
-            
-            {/* Modal Header */}
-            <View className="flex-row items-center justify-between pb-4 border-b border-white/10">
-              <View>
-                <Text className="text-white font-black text-lg">Confirmer la commande</Text>
-                <Text className="text-xs text-white/40">Saisissez les détails de livraison</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setIsCheckoutModalOpen(false)}
-                className="w-8 h-8 bg-white/5 rounded-full items-center justify-center"
-              >
-                <X size={18} color="white" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView className="mt-4" showsVerticalScrollIndicator={false}>
-              {/* Résumé de la commande */}
-              <Text className="text-[10px] font-bold text-[#fcd116] uppercase tracking-wider mb-2">
-                Récapitulatif ({cartCount})
-              </Text>
-              <View className="bg-white/5 border border-white/10 rounded-2xl p-3 mb-4">
-                {cart.map((c, i) => (
-                  <View key={i} className="flex-row justify-between items-center py-1">
-                    <Text className="text-xs text-white/80 font-medium flex-1">
-                      {c.quantity}x {c.name}
-                    </Text>
-                    <Text className="text-xs text-white font-bold">
-                      {(c.price * c.quantity).toLocaleString("fr-FR")} F
-                    </Text>
-                  </View>
-                ))}
-                <View className="flex-row justify-between items-center pt-2 mt-2 border-t border-white/10">
-                  <Text className="text-sm font-black text-white">Total à payer</Text>
-                  <Text className="text-base font-black text-[#fcd116]">
-                    {cartTotal.toLocaleString("fr-FR")} FCFA
-                  </Text>
-                </View>
-              </View>
-
-              {/* Formulaire Adresse & Téléphone */}
-              <View className="mb-3">
-                <Text className="text-[10px] font-bold text-white/40 uppercase mb-1.5">
-                  Adresse de livraison *
-                </Text>
-                <View className="flex-row items-center bg-white/5 border border-white/10 rounded-xl px-3 h-12 gap-2">
-                  <MapPin size={16} color="#ef4444" />
-                  <TextInput
-                    value={deliveryAddress}
-                    onChangeText={setDeliveryAddress}
-                    placeholder="ex: Fidjrossè Calvaire, Maison rouge"
-                    placeholderTextColor="rgba(255,255,255,0.2)"
-                    className="flex-1 text-sm text-white font-medium"
-                  />
-                </View>
-              </View>
-
-              <View className="mb-4">
-                <Text className="text-[10px] font-bold text-white/40 uppercase mb-1.5">
-                  Numéro de Téléphone *
-                </Text>
-                <View className="flex-row items-center bg-white/5 border border-white/10 rounded-xl px-3 h-12 gap-2">
-                  <Phone size={16} color="#34d399" />
-                  <TextInput
-                    value={phone}
-                    onChangeText={setPhone}
-                    placeholder="+229 97 00 00 00"
-                    placeholderTextColor="rgba(255,255,255,0.2)"
-                    keyboardType="phone-pad"
-                    className="flex-1 text-sm text-white font-medium"
-                  />
-                </View>
-              </View>
-
-              {/* Mode de paiement */}
-              <Text className="text-[10px] font-bold text-white/40 uppercase mb-2">
-                Mode de paiement
-              </Text>
-              <View className="flex-row gap-2 mb-6">
-                {[
-                  { key: "MTN", label: "MTN MoMo" },
-                  { key: "MOOV", label: "Moov Money" },
-                  { key: "CASH", label: "Espèces" },
-                ].map(m => (
-                  <TouchableOpacity
-                    key={m.key}
-                    onPress={() => setPaymentMethod(m.key as any)}
-                    className={`flex-1 py-3 rounded-xl border items-center justify-center ${
-                      paymentMethod === m.key
-                        ? "bg-[#fcd116]/10 border-[#fcd116]"
-                        : "bg-white/5 border-white/10"
-                    }`}
-                  >
-                    <Text
-                      className={`text-xs font-bold ${
-                        paymentMethod === m.key ? "text-[#fcd116]" : "text-white/60"
-                      }`}
-                    >
-                      {m.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Bouton de confirmation */}
-              <TouchableOpacity
-                onPress={handleConfirmOrder}
-                disabled={submittingOrder}
-                className="bg-emerald-500 rounded-2xl py-4 items-center justify-center flex-row gap-2 mb-4"
-              >
-                {submittingOrder ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <>
-                    <CheckCircle2 size={18} color="white" />
-                    <Text className="text-white font-black text-sm uppercase">
-                      Valider la commande ({cartTotal.toLocaleString("fr-FR")} F)
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </ScrollView>
-
-          </View>
-        </View>
-      </Modal>
-
     </SafeAreaView>
   );
 }
