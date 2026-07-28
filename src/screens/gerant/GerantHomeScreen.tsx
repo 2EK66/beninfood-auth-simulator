@@ -2,12 +2,13 @@ import React, { useState, useEffect, useCallback } from "react";
 import {
   View, Text, TouchableOpacity, FlatList,
   SafeAreaView, StatusBar, ActivityIndicator,
-  RefreshControl, Image, Alert,
+  RefreshControl, Image, Alert, Platform,
 } from "react-native";
 import {
   ShoppingBag, CheckCircle2, Clock, TrendingUp,
   LogOut, Store, AlertCircle, Camera, ChevronRight,
 } from "lucide-react-native";
+import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
 import { BfProfile, BfOrder, BfRestaurant } from "../../types";
 import { useRouter } from "expo-router";
@@ -42,7 +43,6 @@ export default function GerantHomeScreen({ user }: Props) {
   // 1. Chargement global des données
   const fetchData = useCallback(async () => {
     try {
-      // A. Récupérer le restaurant du gérant
       const { data: rest, error: restErr } = await supabase
         .from("bf_restaurants")
         .select("*")
@@ -53,7 +53,6 @@ export default function GerantHomeScreen({ user }: Props) {
       setRestaurant(rest);
 
       if (rest) {
-        // B. Chargement des 20 dernières commandes
         const { data: ord } = await supabase
           .from("bf_orders")
           .select("*")
@@ -63,7 +62,6 @@ export default function GerantHomeScreen({ user }: Props) {
 
         setOrders(ord || []);
 
-        // C. Chargement des statistiques globales via la Vue SQL
         const { data: st } = await supabase
           .from("bf_restaurant_stats")
           .select("*")
@@ -99,13 +97,13 @@ export default function GerantHomeScreen({ user }: Props) {
       .on(
         "postgres_changes",
         {
-          event: "*", // Écoute INSERT et UPDATE pour rafraîchir en direct
+          event: "*",
           schema: "public",
           table: "bf_orders",
           filter: `restaurant_id=eq.${restaurant.id}`,
         },
         () => {
-          fetchData(); // Met à jour la liste et les stats en direct
+          fetchData();
         }
       )
       .subscribe();
@@ -125,59 +123,76 @@ export default function GerantHomeScreen({ user }: Props) {
 
       if (error) throw error;
 
-      // Mise à jour locale immédiate
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: nextStatus } : o));
     } catch (err: any) {
       Alert.alert("Erreur", "Impossible de modifier le statut de la commande.");
     }
   };
 
-  // 4. Upload Optimisé de l'image (Écrasement avec file unique)
-  const pickAndUploadImage = () => {
+  // 4. Upload d'image natif compatible Android / iOS
+  const pickAndUploadImage = async () => {
     if (!restaurant) return;
 
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
+    try {
+      // Demander les permissions d'accès aux médias
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Permission refusée", "L'accès aux photos est requis pour changer la photo de profil.");
+        return;
+      }
 
-    input.onchange = async (e: any) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
+      // Sélection de l'image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets?.[0]?.uri) return;
 
       setUploadingImage(true);
+      const asset = result.assets[0];
 
-      try {
-        const fileExt = file.name.split(".").pop() || "jpg";
-        // Nom fixe par restaurant pour éviter d'encombrer le bucket
-        const filePath = `restaurants/${restaurant.id}/logo.${fileExt}`;
+      // Conversion de l'URI de l'image en ArrayBuffer pour Supabase Storage
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      const arrayBuffer = await new Response(blob).arrayBuffer();
 
-        const { error: uploadError } = await supabase.storage
-          .from("restaurant-images")
-          .upload(filePath, file, { contentType: file.type, upsert: true });
+      const fileExt = asset.uri.split(".").pop()?.toLowerCase() || "jpg";
+      const filePath = `restaurants/${restaurant.id}/logo.${fileExt}`;
 
-        if (uploadError) throw uploadError;
+      // Envoi du fichier sur Supabase
+      const { error: uploadError } = await supabase.storage
+        .from("restaurant-images")
+        .upload(filePath, arrayBuffer, {
+          contentType: asset.type ? `${asset.type}/${fileExt}` : `image/${fileExt}`,
+          upsert: true,
+        });
 
-        const { data: publicUrlData } = supabase.storage
-          .from("restaurant-images")
-          .getPublicUrl(filePath);
+      if (uploadError) throw uploadError;
 
-        const imageUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`; // Anti-cache URL
+      // Récupération de l'URL publique
+      const { data: publicUrlData } = supabase.storage
+        .from("restaurant-images")
+        .getPublicUrl(filePath);
 
-        await supabase
-          .from("bf_restaurants")
-          .update({ image_url: imageUrl })
-          .eq("id", restaurant.id);
+      const imageUrl = `${publicUrlData.publicUrl}?t=${Date.now()}`; // Anti-cache
 
-        setRestaurant(prev => prev ? { ...prev, image_url: imageUrl } : null);
-        Alert.alert("Succès", "Logo mis à jour avec succès.");
-      } catch (err: any) {
-        Alert.alert("Erreur", "Échec de la mise à jour de l'image.");
-      } finally {
-        setUploadingImage(false);
-      }
-    };
+      // Mise à jour en BDD
+      await supabase
+        .from("bf_restaurants")
+        .update({ image_url: imageUrl })
+        .eq("id", restaurant.id);
 
-    input.click();
+      setRestaurant(prev => prev ? { ...prev, image_url: imageUrl } : null);
+      Alert.alert("Succès", "Logo mis à jour avec succès.");
+    } catch (err: any) {
+      console.error("Erreur upload:", err);
+      Alert.alert("Erreur", "Échec de la mise à jour de l'image.");
+    } finally {
+      setUploadingImage(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -262,7 +277,7 @@ export default function GerantHomeScreen({ user }: Props) {
               </View>
             )}
 
-            {/* Statistiques Réelles (Issues de la Vue SQL) */}
+            {/* Statistiques Réelles */}
             <View className="flex-row gap-3 mb-5">
               <View className="flex-1 bg-[#0d1a12] border border-[#1a2e1f] rounded-2xl p-4">
                 <TrendingUp size={16} color="#fcd116" />
