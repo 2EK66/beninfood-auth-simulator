@@ -13,7 +13,7 @@ import { BfProfile, BfRestaurant, BfMenuItem, CartItem } from "../../types";
 
 interface Props {
   user: BfProfile;
-  navigation?: any; // Pour React Navigation / Bottom Tabs
+  navigation?: any;
 }
 
 const CATEGORIES = ["Tous", "Maquis 🇧🇯", "Grillades", "Fast-Food", "Pâtisseries"];
@@ -70,10 +70,8 @@ export default function HomeScreen({ user, navigation }: Props) {
     return matchSearch && matchCat;
   });
 
-  // Action du bouton "Commander" : Redirection vers l'écran CommandeScreen
   const handleGoToCommande = () => {
     if (navigation) {
-      // Redirige vers l'onglet/écran de commande avec le panier et l'étape "checkout"
       navigation.navigate("Commande", { initialCart: cart, initialStep: "checkout" });
     }
   };
@@ -82,30 +80,42 @@ export default function HomeScreen({ user, navigation }: Props) {
     <SafeAreaView className="flex-1 bg-bf-dark">
       <StatusBar barStyle="light-content" backgroundColor="#001f13" />
 
-      {/* Header */}
+      {/* 🟢 HEADER CORRIGÉ */}
       <View className="px-5 pt-3 pb-4 bg-bf-green/30 border-b border-bf-border flex-row items-center justify-between">
-        <View className="flex-row items-center gap-x-3">
-          <View className="w-9 h-9 rounded-full items-center justify-center" style={{ backgroundColor: "#fcd116" }}>
+        
+        {/* Infos Utilisateur (avec flex-1 et numberOfLines pour éviter de pousser les boutons hors de l'écran) */}
+        <View className="flex-row items-center flex-1 mr-2">
+          <View className="w-9 h-9 rounded-full items-center justify-center mr-3" style={{ backgroundColor: "#fcd116" }}>
             <Text className="text-bf-dark font-black text-sm">
-              {user.name.charAt(0).toUpperCase()}
+              {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
             </Text>
           </View>
-          <View>
+          <View className="flex-1">
             <Text className="text-white/40 text-xs font-semibold">Akwaaba 👋</Text>
-            <Text className="text-white font-black text-sm">{user.name}</Text>
+            <Text className="text-white font-black text-sm" numberOfLines={1}>
+              {user?.name || "Utilisateur"}
+            </Text>
           </View>
         </View>
-        <View className="flex-row items-center gap-x-2">
-          <TouchableOpacity className="w-9 h-9 bg-white/5 border border-white/10 rounded-full items-center justify-center">
+
+        {/* Action Buttons (Notification + Déconnexion) */}
+        <View className="flex-row items-center">
+          <TouchableOpacity 
+            activeOpacity={0.7}
+            className="w-9 h-9 bg-white/5 border border-white/10 rounded-full items-center justify-center mr-2"
+          >
             <Bell size={16} color="#fcd116" />
           </TouchableOpacity>
+
           <TouchableOpacity
             onPress={signOutUser}
+            activeOpacity={0.7}
             className="w-9 h-9 bg-red-500/10 border border-red-500/20 rounded-full items-center justify-center"
           >
             <LogOut size={15} color="#ef4444" />
           </TouchableOpacity>
         </View>
+
       </View>
 
       <ScrollView
@@ -115,14 +125,14 @@ export default function HomeScreen({ user, navigation }: Props) {
       >
         {/* Barre de recherche */}
         <View className="px-5 pt-4">
-          <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 h-12 gap-x-3">
+          <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 h-12">
             <Search size={16} color="#94A3B8" />
             <TextInput
               placeholder="Atassi, Amiwo, Fufu, maquis…"
               placeholderTextColor="#94A3B8"
               value={search}
               onChangeText={setSearch}
-              className="flex-1 text-white text-sm font-medium"
+              className="flex-1 text-white text-sm font-medium ml-3"
             />
             {search ? (
               <TouchableOpacity onPress={() => setSearch("")}>
@@ -137,8 +147,8 @@ export default function HomeScreen({ user, navigation }: Props) {
         </View>
 
         {/* Catégories */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-4" contentContainerStyle={{ paddingHorizontal: 20, gap: 8 }}>
-          {CATEGORIES.map(cat => (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-4" contentContainerStyle={{ paddingHorizontal: 20 }}>
+          {CATEGORIES.map((cat, idx) => (
             <TouchableOpacity
               key={cat}
               onPress={() => setCategory(cat)}
@@ -146,6 +156,7 @@ export default function HomeScreen({ user, navigation }: Props) {
               style={{
                 backgroundColor: category === cat ? "#fcd116" : "rgba(255,255,255,0.05)",
                 borderColor: category === cat ? "#fcd116" : "rgba(255,255,255,0.1)",
+                marginRight: idx === CATEGORIES.length - 1 ? 0 : 8
               }}
             >
               <Text className="text-xs font-black" style={{ color: category === cat ? "#001f13" : "rgba(255,255,255,0.7)" }}>
@@ -162,11 +173,15 @@ export default function HomeScreen({ user, navigation }: Props) {
               <Text className="text-white font-black text-sm">🔥 Plats du Jour</Text>
               <Text className="text-xs font-bold" style={{ color: "#fcd116" }}>Menu live 🇧🇯</Text>
             </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 12 }}>
-              {menuItems.map(item => {
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20 }}>
+              {menuItems.map((item, idx) => {
                 const rest = restaurants.find(r => r.id === item.restaurant_id);
                 return (
-                  <View key={item.id} className="w-36 bg-bf-card border border-bf-border rounded-2xl overflow-hidden">
+                  <View 
+                    key={item.id} 
+                    className="w-36 bg-bf-card border border-bf-border rounded-2xl overflow-hidden"
+                    style={{ marginRight: idx === menuItems.length - 1 ? 0 : 12 }}
+                  >
                     {item.image_url ? (
                       <Image source={{ uri: item.image_url }} className="w-full h-20" resizeMode="cover" />
                     ) : (
@@ -224,8 +239,8 @@ export default function HomeScreen({ user, navigation }: Props) {
                   </View>
                 )}
                 {/* Badge note */}
-                <View className="absolute top-3 right-3 flex-row items-center bg-black/60 px-2 py-1 rounded-lg gap-x-1">
-                  <Star size={10} fill="#fcd116" color="#fcd116" />
+                <View className="absolute top-3 right-3 flex-row items-center bg-black/60 px-2 py-1 rounded-lg">
+                  <Star size={10} fill="#fcd116" color="#fcd116" style={{ marginRight: 4 }} />
                   <Text className="text-white font-black text-xs">{(r.rating || 4.5).toFixed(1)}</Text>
                 </View>
                 <View className="p-3">
@@ -237,8 +252,8 @@ export default function HomeScreen({ user, navigation }: Props) {
                   </View>
                   <Text className="text-white/50 text-xs" numberOfLines={2}>{r.description}</Text>
                   <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-white/5">
-                    <View className="flex-row items-center gap-x-1">
-                      <MapPin size={10} color="#ef4444" />
+                    <View className="flex-row items-center">
+                      <MapPin size={10} color="#ef4444" style={{ marginRight: 4 }} />
                       <Text className="text-white/40 text-[10px] font-bold">{r.location}</Text>
                     </View>
                     <Text className="text-emerald-400 text-[9px] font-black">🛵 Livraison rapide</Text>
@@ -253,8 +268,8 @@ export default function HomeScreen({ user, navigation }: Props) {
       {/* Barre de panier flottante */}
       {cartCount > 0 && (
         <View className="absolute bottom-5 left-5 right-5 bg-bf-green border border-bf-gold/30 rounded-2xl px-4 py-3 flex-row items-center justify-between shadow-2xl">
-          <View className="flex-row items-center gap-x-3">
-            <View className="w-8 h-8 rounded-xl items-center justify-center" style={{ backgroundColor: "rgba(252,209,22,0.15)" }}>
+          <View className="flex-row items-center">
+            <View className="w-8 h-8 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: "rgba(252,209,22,0.15)" }}>
               <ShoppingBag size={14} color="#fcd116" />
             </View>
             <View>
@@ -266,7 +281,7 @@ export default function HomeScreen({ user, navigation }: Props) {
           <TouchableOpacity
             onPress={handleGoToCommande}
             activeOpacity={0.8}
-            className="flex-row items-center px-4 py-2 rounded-xl gap-x-1.5"
+            className="flex-row items-center px-4 py-2 rounded-xl"
             style={{ backgroundColor: "#fcd116" }}
           >
             <Text className="text-bf-dark font-black text-xs">Commander</Text>
