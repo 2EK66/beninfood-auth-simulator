@@ -6,21 +6,25 @@ import {
 } from "react-native";
 import {
   ShoppingBag, MapPin, Phone, Trash2,
-  CheckCircle2, Plus, Minus, ArrowRight, User, Navigation
+  CheckCircle2, Plus, Minus, ArrowRight, User, Navigation, Clock
 } from "lucide-react-native";
 import * as Location from "expo-location";
 import { supabase } from "../../lib/supabase";
 import { BfProfile, BfRestaurant, CartItem } from "../../types";
 
-interface Props { user: BfProfile; }
+interface Props {
+  user: BfProfile;
+  route?: any;
+  navigation?: any;
+}
 
 const MOMO_OPERATORS = ["MTN MoMo", "Moov Flooz"] as const;
 
-export default function CommandeScreen({ user }: Props) {
+export default function CommandeScreen({ user, route, navigation }: Props) {
   const [cart, setCart] = useState<CartItem[]>([]);
-  
+
   // Champs du formulaire de livraison
-  const [fullName, setFullName] = useState(user.full_name || "");
+  const [fullName, setFullName] = useState(user.name || "");
   const [phone, setPhone] = useState(user.phone || "");
   const [landmark, setLandmark] = useState("");
   const [coordinates, setCoordinates] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -36,6 +40,15 @@ export default function CommandeScreen({ user }: Props) {
   const [restaurants, setRestaurants] = useState<BfRestaurant[]>([]);
 
   useEffect(() => {
+    if (route?.params?.initialCart) {
+      setCart(route.params.initialCart);
+    }
+    if (route?.params?.initialStep) {
+      setStep(route.params.initialStep);
+    }
+  }, [route?.params]);
+
+  useEffect(() => {
     const fetch = async () => {
       const [menuRes, restRes] = await Promise.all([
         supabase.from("bf_menu_du_jour").select("*").eq("is_available", true).limit(10),
@@ -47,11 +60,38 @@ export default function CommandeScreen({ user }: Props) {
     fetch();
   }, []);
 
+  // Gestion des ajouts au panier avec vérification d'unicité du restaurant
   const addItem = (item: any) => {
-    // Si item.restaurant_id n'est pas présent, on se rabat sur le 1er restaurant par défaut
     const rest = restaurants.find(r => r.id === item.restaurant_id) || restaurants[0];
     if (!rest) {
       Alert.alert("Erreur", "Aucun restaurant associé à ce plat.");
+      return;
+    }
+
+    // Vérification multi-restaurant : le panier ne peut contenir que les plats d'un seul restaurant à la fois
+    if (cart.length > 0 && cart[0].restaurantId !== rest.id) {
+      Alert.alert(
+        "Changer de restaurant ?",
+        `Votre panier contient déjà des plats de "${cart[0].restaurantName}". Souhaitez-vous vider le panier pour commander chez "${rest.name}" ?`,
+        [
+          { text: "Annuler", style: "cancel" },
+          {
+            text: "Vider et ajouter",
+            style: "destructive",
+            onPress: () => {
+              setCart([{
+                menuItemId: item.id,
+                name: item.dish_name,
+                price: Number(item.price),
+                quantity: 1,
+                image_url: item.image_url,
+                restaurantId: rest.id,
+                restaurantName: rest.name,
+              }]);
+            }
+          }
+        ]
+      );
       return;
     }
 
@@ -72,7 +112,7 @@ export default function CommandeScreen({ user }: Props) {
     });
   };
 
-  const removeItem = (menuItemId: number) => {
+  const removeItem = (menuItemId: string | number) => {
     setCart(prev => {
       const item = prev.find(c => c.menuItemId === menuItemId);
       if (!item) return prev;
@@ -131,7 +171,8 @@ export default function CommandeScreen({ user }: Props) {
       const commission = Math.round(totalDishes * 0.10);
       const restaurantAmount = totalDishes - commission;
 
-      const { data, error } = await supabase
+      // 1. Insertion dans la table des commandes (bf_orders) avec champs structurés
+      const { data: orderData, error: orderError } = await supabase
         .from("bf_orders")
         .insert({
           client_id: user.id,
@@ -140,15 +181,35 @@ export default function CommandeScreen({ user }: Props) {
           restaurant_amount: restaurantAmount,
           delivery_amount: deliveryFee,
           commission_amount: commission,
-          delivery_landmark: `${fullName.trim()} (${phone.trim()}) - ${landmark.trim()}`,
+          delivery_name: fullName.trim(),
+          delivery_phone: phone.trim(),
+          delivery_landmark: landmark.trim(),
+          delivery_latitude: coordinates?.latitude || null,
+          delivery_longitude: coordinates?.longitude || null,
           status: "pending",
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (orderError) throw orderError;
 
-      setOrderId(data.id);
+      // 2. Insertion des détails des plats dans la table bf_order_items
+      const orderItemsToInsert = cart.map(item => ({
+        order_id: orderData.id,
+        menu_item_id: item.menuItemId,
+        dish_name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        subtotal: item.price * item.quantity,
+      }));
+
+      const { error: itemsError } = await supabase
+        .from("bf_order_items")
+        .insert(orderItemsToInsert);
+
+      if (itemsError) throw itemsError;
+
+      setOrderId(orderData.id);
       setStep("success");
       setCart([]);
     } catch (err: any) {
@@ -192,12 +253,30 @@ export default function CommandeScreen({ user }: Props) {
           </View>
         </View>
 
+        {/* Bouton Suivre ma commande */}
         <TouchableOpacity
-          onPress={() => { setStep("cart"); setLandmark(""); }}
-          className="w-full py-4 rounded-2xl items-center"
+          onPress={() => {
+            if (navigation) {
+              navigation.navigate("OrderTracking", { orderId });
+            } else {
+              Alert.alert("Suivi", `Redirection vers le suivi de la commande #${orderId.slice(0, 8)}`);
+            }
+          }}
+          className="w-full py-4 rounded-2xl items-center flex-row justify-center gap-2 mb-3"
           style={{ backgroundColor: "#fcd116" }}
         >
+          <Clock size={18} color="#0a0f0d" />
           <Text className="text-[#0a0f0d] font-black text-base">
+            Suivre ma commande
+          </Text>
+        </TouchableOpacity>
+
+        {/* Bouton Retour au menu */}
+        <TouchableOpacity
+          onPress={() => { setStep("cart"); setLandmark(""); }}
+          className="w-full py-3 rounded-2xl items-center bg-white/10"
+        >
+          <Text className="text-white font-bold text-sm">
             Retour au menu
           </Text>
         </TouchableOpacity>
@@ -309,7 +388,9 @@ export default function CommandeScreen({ user }: Props) {
           <>
             {/* Récapitulatif Panier */}
             <View className="bg-[#0d1a12] border border-[#1a2e1f] rounded-2xl p-4 mb-5">
-              <Text className="text-xs font-bold text-[#fcd116] uppercase mb-2">Résumé des plats</Text>
+              <Text className="text-xs font-bold text-[#fcd116] uppercase mb-2">
+                Restaurant: {cart[0]?.restaurantName || "Sélectionné"}
+              </Text>
               {cart.map(item => (
                 <View key={item.menuItemId} className="flex-row justify-between mb-1">
                   <Text className="text-white/70 text-sm">{item.quantity}x {item.name}</Text>
