@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import {
   Bike, MapPin, Package, LogOut,
-  Wifi, WifiOff, CheckCircle2, Navigation, Utensils, Clock, AlertTriangle, ShieldCheck, Compass
+  Wifi, WifiOff, CheckCircle2, Navigation, Utensils, Clock, AlertTriangle, ShieldCheck, Compass, XCircle
 } from "lucide-react-native";
 import { supabase } from "../../lib/supabase";
 import { BfProfile, BfOrder } from "../../types";
@@ -14,9 +14,8 @@ import { useRouter } from "expo-router";
 
 interface Props { user: BfProfile; }
 
-// Fonction utilitaire pour calculer la distance à vol d'oiseau (Formule d'Haversine)
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): string {
-  const R = 6371; // Rayon de la Terre en km
+  const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -36,13 +35,13 @@ export default function LivreurCoursesScreen({ user }: Props) {
   const [actionLoading, setActionLoading] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<"Connecting..." | "Live" | "Offline" | "Reconnexion...">("Connecting...");
 
-  // Stocke le temps restant calculé basé sur reserved_until
   const [activeReservation, setActiveReservation] = useState<{ orderId: string; secondsLeft: number } | null>(null);
 
   const fetchCourses = async () => {
     const nowIso = new Date().toISOString();
 
-    // Filtre : status pending ET (non réservée OU réservation expirée OU réservée PAR MOI)
+    // Filtre corrigé : On récupère uniquement les courses réservées SPÉCIFIQUEMENT à ce livreur ET non expirées,
+    // OU les courses publiques libres sans réservation active.
     const { data, error } = await supabase
       .from("bf_orders")
       .select(`
@@ -61,13 +60,12 @@ export default function LivreurCoursesScreen({ user }: Props) {
         reserved_until
       `)
       .eq("status", "pending")
-      .or(`reserved_until.is.null,reserved_until.lt.${nowIso},reserved_by.eq.${user.id}`)
+      .or(`reserved_by.eq.${user.id},and(reserved_by.is.null,reserved_until.is.null)`)
       .order("created_at", { ascending: false });
 
     if (!error && data) {
       setCourses(data);
 
-      // Vérifier si une commande est actuellement réservée par ce livreur
       const myReservedOrder = data.find(
         (o) => o.reserved_by === user.id && o.reserved_until && new Date(o.reserved_until) > new Date()
       );
@@ -82,14 +80,30 @@ export default function LivreurCoursesScreen({ user }: Props) {
     setLoading(false);
   };
 
-  // Compte à rebours basé sur la date serveur
+  // Gestion de l'expiration automatique (Passage au livreur suivant)
+  const handleExpireOrReject = async (orderId: string, reason: 'expired' | 'rejected' = 'expired') => {
+    setActiveReservation(null);
+    setActionLoading(true);
+
+    await supabase.rpc("advance_dispatch_queue", {
+      p_order_id: orderId,
+      p_reason: reason
+    });
+
+    setActionLoading(false);
+    await fetchCourses();
+  };
+
+  // Compte à rebours temps réel
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (activeReservation && activeReservation.secondsLeft > 0) {
       timer = setInterval(() => {
         setActiveReservation((prev) => {
-          if (!prev || prev.secondsLeft <= 1) {
-            fetchCourses(); // Recharger quand le temps expire
+          if (!prev) return null;
+          if (prev.secondsLeft <= 1) {
+            // Déclencher la cascade vers le livreur suivant si le temps est écoulé
+            handleExpireOrReject(prev.orderId, 'expired');
             return null;
           }
           return { ...prev, secondsLeft: prev.secondsLeft - 1 };
@@ -97,7 +111,7 @@ export default function LivreurCoursesScreen({ user }: Props) {
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [activeReservation?.orderId]);
+  }, [activeReservation?.orderId, activeReservation?.secondsLeft]);
 
   useEffect(() => {
     fetchCourses();
@@ -132,7 +146,7 @@ export default function LivreurCoursesScreen({ user }: Props) {
     setRefreshing(false);
   };
 
-  // 1. Réservation Atomique via la fonction PostgreSQL
+  // Réservation Manuelle pour commande publique libre
   const handleReserve = async (orderId: string) => {
     setActionLoading(true);
 
@@ -152,7 +166,7 @@ export default function LivreurCoursesScreen({ user }: Props) {
     await fetchCourses();
   };
 
-  // 2. Confirmation Définitive via la fonction PostgreSQL
+  // Confirmation Définitive
   const handleConfirmOrder = async (orderId: string) => {
     setActionLoading(true);
 
@@ -164,13 +178,12 @@ export default function LivreurCoursesScreen({ user }: Props) {
     setActionLoading(false);
 
     if (error || !isSuccess) {
-      Alert.alert("Délai expiré", "Le temps de réservation de 30 secondes s'est écoulé.");
+      Alert.alert("Délai expiré", "Le temps de réservation s'est écoulé.");
       setActiveReservation(null);
       await fetchCourses();
       return;
     }
 
-    // Redirection directe vers l'écran de livraison active
     router.replace({
       pathname: "/(livreur)/livraison",
       params: { orderId },
@@ -287,22 +300,21 @@ export default function LivreurCoursesScreen({ user }: Props) {
         ListHeaderComponent={
           <View className="mb-4">
             <View className="flex-row items-center justify-between">
-              <Text className="text-sm font-black text-white">Courses disponibles</Text>
+              <Text className="text-sm font-black text-white">Offres de livraison</Text>
               <View className="bg-[#fcd116]/10 border border-[#fcd116]/20 px-3 py-1 rounded-full">
                 <Text className="text-[11px] font-black text-[#fcd116]">
-                  {courses.length} course{courses.length > 1 ? "s" : ""}
+                  {courses.length} disponible{courses.length > 1 ? "s" : ""}
                 </Text>
               </View>
             </View>
             <Text className="text-xs text-white/30 mt-1">
-              Réservation atomique sécurisée (30s)
+              File d'attente automatisée & Réservation exclusive (30s)
             </Text>
           </View>
         }
         renderItem={({ item: order }) => {
           const isReservedByMe = activeReservation?.orderId === order.id;
 
-          // Calcul de la distance du restaurant au client si les GPS sont disponibles
           const distanceText =
             order.restaurant_lat && order.restaurant_lng && order.delivery_lat && order.delivery_lng
               ? calculateDistance(order.restaurant_lat, order.restaurant_lng, order.delivery_lat, order.delivery_lng)
@@ -320,7 +332,7 @@ export default function LivreurCoursesScreen({ user }: Props) {
                 {renderTimeBadge(order.created_at)}
               </View>
 
-              {/* Trajet / Distance du parcours */}
+              {/* Trajet / Distance */}
               {distanceText && (
                 <View className="flex-row items-center gap-1.5 mb-3 bg-[#fcd116]/10 border border-[#fcd116]/20 px-3 py-1.5 rounded-xl self-start">
                   <Compass size={12} color="#fcd116" />
@@ -389,31 +401,43 @@ export default function LivreurCoursesScreen({ user }: Props) {
                 </View>
               </View>
 
-              {/* ACTION : Réservation vs Confirmation */}
+              {/* ACTIONS : Accepter ou Refuser la course attribuée */}
               {isReservedByMe ? (
                 <View className="bg-[#fcd116]/10 border border-[#fcd116]/30 p-3 rounded-xl">
-                  <View className="flex-row items-center justify-between mb-2">
+                  <View className="flex-row items-center justify-between mb-3">
                     <Text className="text-xs font-bold text-[#fcd116]">
-                      🔒 Course réservée temporairement
+                      🔒 Course qui vous est assignée !
                     </Text>
-                    <Text className="text-xs font-black text-white bg-red-500/80 px-2 py-0.5 rounded-md">
+                    <Text className="text-xs font-black text-white bg-red-500 px-2 py-0.5 rounded-md">
                       ⏱ {activeReservation?.secondsLeft}s
                     </Text>
                   </View>
-                  <TouchableOpacity
-                    onPress={() => handleConfirmOrder(order.id)}
-                    disabled={actionLoading}
-                    className="bg-[#fcd116] py-3.5 rounded-xl items-center flex-row justify-center gap-2"
-                  >
-                    {actionLoading ? (
-                      <ActivityIndicator color="#0d1a12" size="small" />
-                    ) : (
-                      <ShieldCheck size={18} color="#0d1a12" />
-                    )}
-                    <Text className="text-sm font-black text-[#0d1a12]">
-                      Confirmer la livraison
-                    </Text>
-                  </TouchableOpacity>
+
+                  <View className="flex-row items-center gap-2">
+                    <TouchableOpacity
+                      onPress={() => handleExpireOrReject(order.id, 'rejected')}
+                      disabled={actionLoading}
+                      className="flex-1 bg-red-500/20 border border-red-500/40 py-3.5 rounded-xl items-center flex-row justify-center gap-1.5"
+                    >
+                      <XCircle size={16} color="#f87171" />
+                      <Text className="text-xs font-black text-red-400">Refuser</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => handleConfirmOrder(order.id)}
+                      disabled={actionLoading}
+                      className="flex-2 bg-[#fcd116] py-3.5 rounded-xl items-center flex-row justify-center gap-2 px-4"
+                    >
+                      {actionLoading ? (
+                        <ActivityIndicator color="#0d1a12" size="small" />
+                      ) : (
+                        <ShieldCheck size={18} color="#0d1a12" />
+                      )}
+                      <Text className="text-xs font-black text-[#0d1a12]">
+                        Accepter la course
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ) : (
                 <TouchableOpacity
@@ -442,10 +466,10 @@ export default function LivreurCoursesScreen({ user }: Props) {
               <CheckCircle2 size={28} color="rgba(255,255,255,0.15)" />
             </View>
             <Text className="text-sm font-bold text-white/30">
-              Aucune course disponible
+              Aucune course attribuée pour l'instant
             </Text>
             <Text className="text-xs text-white/20 mt-1.5 text-center px-8">
-              Tirez vers le bas pour actualiser ou attendez une nouvelle commande
+              Vous recevrez une notification prioritaire dès qu'une commande correspondra à votre zone et réputation.
             </Text>
           </View>
         }
