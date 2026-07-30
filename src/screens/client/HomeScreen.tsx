@@ -60,6 +60,22 @@ export default function HomeScreen({ user, navigation }: Props) {
     });
   };
 
+  // Handler de déconnexion sécurisé
+  const handleSignOut = async () => {
+    try {
+      await signOutUser();
+    } catch (err) {
+      console.error("Erreur lors de la déconnexion:", err);
+    }
+  };
+
+  // Handler de navigation vers la page d'un maquis / restaurant
+  const handleSelectRestaurant = (restaurant: BfRestaurant) => {
+    if (navigation) {
+      navigation.navigate("RestaurantDetail", { restaurant });
+    }
+  };
+
   const cartTotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
   const cartCount = cart.reduce((s, c) => s + c.quantity, 0);
 
@@ -80,10 +96,10 @@ export default function HomeScreen({ user, navigation }: Props) {
     <SafeAreaView className="flex-1 bg-bf-dark">
       <StatusBar barStyle="light-content" backgroundColor="#001f13" />
 
-      {/* 🟢 HEADER CORRIGÉ */}
+      {/* HEADER */}
       <View className="px-5 pt-3 pb-4 bg-bf-green/30 border-b border-bf-border flex-row items-center justify-between">
         
-        {/* Infos Utilisateur (avec flex-1 et numberOfLines pour éviter de pousser les boutons hors de l'écran) */}
+        {/* Infos Utilisateur */}
         <View className="flex-row items-center flex-1 mr-2">
           <View className="w-9 h-9 rounded-full items-center justify-center mr-3" style={{ backgroundColor: "#fcd116" }}>
             <Text className="text-bf-dark font-black text-sm">
@@ -107,8 +123,9 @@ export default function HomeScreen({ user, navigation }: Props) {
             <Bell size={16} color="#fcd116" />
           </TouchableOpacity>
 
+          {/* Bouton de déconnexion corrigé */}
           <TouchableOpacity
-            onPress={signOutUser}
+            onPress={handleSignOut}
             activeOpacity={0.7}
             className="w-9 h-9 bg-red-500/10 border border-red-500/20 rounded-full items-center justify-center"
           >
@@ -212,7 +229,7 @@ export default function HomeScreen({ user, navigation }: Props) {
           </View>
         )}
 
-        {/* Restaurants */}
+        {/* Liste des Maquis/Restaurants */}
         <View className="mt-5 px-5">
           <View className="flex-row items-center justify-between mb-3">
             <Text className="text-white font-black text-sm">
@@ -230,7 +247,13 @@ export default function HomeScreen({ user, navigation }: Props) {
             </View>
           ) : (
             filtered.map(r => (
-              <View key={r.id} className="bg-bf-card border border-bf-border rounded-2xl overflow-hidden mb-4">
+              /* Carte Maquis rendue cliquable avec TouchableOpacity */
+              <TouchableOpacity 
+                key={r.id} 
+                activeOpacity={0.85}
+                onPress={() => handleSelectRestaurant(r)}
+                className="bg-bf-card border border-bf-border rounded-2xl overflow-hidden mb-4"
+              >
                 {r.image_url ? (
                   <Image source={{ uri: r.image_url }} className="w-full h-36" resizeMode="cover" />
                 ) : (
@@ -259,7 +282,7 @@ export default function HomeScreen({ user, navigation }: Props) {
                     <Text className="text-emerald-400 text-[9px] font-black">🛵 Livraison rapide</Text>
                   </View>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           )}
         </View>
