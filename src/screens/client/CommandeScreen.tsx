@@ -40,7 +40,7 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
   const [restaurants, setRestaurants] = useState<BfRestaurant[]>([]);
 
   useEffect(() => {
-    if (route?.params?.initialCart) {
+    if (route?.params?.initialCart && route.params.initialCart.length > 0) {
       setCart(route.params.initialCart);
     }
     if (route?.params?.initialStep) {
@@ -50,12 +50,16 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
 
   useEffect(() => {
     const fetch = async () => {
-      const [menuRes, restRes] = await Promise.all([
-        supabase.from("bf_menu_du_jour").select("*").eq("is_available", true).limit(10),
-        supabase.from("bf_restaurants").select("*").limit(10),
-      ]);
-      setMenuItems(menuRes.data || []);
-      setRestaurants(restRes.data || []);
+      try {
+        const [menuRes, restRes] = await Promise.all([
+          supabase.from("bf_menu_du_jour").select("*").eq("is_available", true).limit(20),
+          supabase.from("bf_restaurants").select("*").limit(20),
+        ]);
+        setMenuItems(menuRes.data || []);
+        setRestaurants(restRes.data || []);
+      } catch (err) {
+        console.error("Erreur chargement menu:", err);
+      }
     };
     fetch();
   }, []);
@@ -72,7 +76,7 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
     if (cart.length > 0 && cart[0].restaurantId !== rest.id) {
       Alert.alert(
         "Changer de restaurant ?",
-        `Votre panier contient déjà des plats de "${cart[0].restaurantName}". Souhaitez-vous vider le panier pour commander chez "${rest.name}" ?`,
+        `Votre panier contient déjà des plats de "${cart[0].restaurantName || "un autre restaurant"}". Souhaitez-vous vider le panier pour commander chez "${rest.name}" ?`,
         [
           { text: "Annuler", style: "cancel" },
           {
@@ -80,7 +84,7 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
             style: "destructive",
             onPress: () => {
               setCart([{
-                menuItemId: item.id,
+                menuItemId: String(item.id),
                 name: item.dish_name,
                 price: Number(item.price),
                 quantity: 1,
@@ -96,12 +100,12 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
     }
 
     setCart(prev => {
-      const existing = prev.find(c => c.menuItemId === item.id);
+      const existing = prev.find(c => String(c.menuItemId) === String(item.id));
       if (existing) {
-        return prev.map(c => c.menuItemId === item.id ? { ...c, quantity: c.quantity + 1 } : c);
+        return prev.map(c => String(c.menuItemId) === String(item.id) ? { ...c, quantity: c.quantity + 1 } : c);
       }
       return [...prev, {
-        menuItemId: item.id,
+        menuItemId: String(item.id),
         name: item.dish_name,
         price: Number(item.price),
         quantity: 1,
@@ -114,10 +118,10 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
 
   const removeItem = (menuItemId: string | number) => {
     setCart(prev => {
-      const item = prev.find(c => c.menuItemId === menuItemId);
+      const item = prev.find(c => String(c.menuItemId) === String(menuItemId));
       if (!item) return prev;
-      if (item.quantity === 1) return prev.filter(c => c.menuItemId !== menuItemId);
-      return prev.map(c => c.menuItemId === menuItemId ? { ...c, quantity: c.quantity - 1 } : c);
+      if (item.quantity === 1) return prev.filter(c => String(c.menuItemId) !== String(menuItemId));
+      return prev.map(c => String(c.menuItemId) === String(menuItemId) ? { ...c, quantity: c.quantity - 1 } : c);
     });
   };
 
@@ -151,6 +155,10 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
 
   // Validation finale de la commande vers Supabase
   const handleFinalSubmit = async () => {
+    if (cart.length === 0) {
+      Alert.alert("Panier vide", "Veuillez ajouter au moins un plat à votre panier.");
+      return;
+    }
     if (!fullName.trim()) {
       Alert.alert("Nom requis", "Veuillez indiquer votre nom complet.");
       return;
@@ -164,19 +172,26 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
       return;
     }
 
+    // Récupération sécurisée du restaurant_id
+    const targetRestaurantId = cart[0]?.restaurantId || (restaurants.length > 0 ? restaurants[0].id : null);
+
+    if (!targetRestaurantId) {
+      Alert.alert("Erreur Restaurant", "Aucun restaurant n'a pu être identifié pour cette commande.");
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const restaurantId = cart[0]?.restaurantId || restaurants[0]?.id;
       const commission = Math.round(totalDishes * 0.10);
       const restaurantAmount = totalDishes - commission;
 
-      // 1. Insertion dans la table des commandes (bf_orders) avec champs structurés
+      // 1. Insertion dans la table des commandes (bf_orders)
       const { data: orderData, error: orderError } = await supabase
         .from("bf_orders")
         .insert({
           client_id: user.id,
-          restaurant_id: restaurantId,
+          restaurant_id: targetRestaurantId,
           total_amount: grandTotal,
           restaurant_amount: restaurantAmount,
           delivery_amount: deliveryFee,
@@ -191,29 +206,35 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
         .select()
         .single();
 
-      if (orderError) throw orderError;
+      if (orderError) {
+        console.error("Erreur bf_orders:", orderError);
+        throw new Error(orderError.message || "Erreur lors de la création de la commande.");
+      }
 
       // 2. Insertion des détails des plats dans la table bf_order_items
       const orderItemsToInsert = cart.map(item => ({
         order_id: orderData.id,
-        menu_item_id: item.menuItemId,
+        menu_item_id: String(item.menuItemId),
         dish_name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        subtotal: item.price * item.quantity,
+        price: Number(item.price),
+        quantity: Number(item.quantity),
+        subtotal: Number(item.price) * Number(item.quantity),
       }));
 
       const { error: itemsError } = await supabase
         .from("bf_order_items")
         .insert(orderItemsToInsert);
 
-      if (itemsError) throw itemsError;
+      if (itemsError) {
+        console.error("Erreur bf_order_items:", itemsError);
+        throw new Error(itemsError.message || "Erreur lors de l'enregistrement des articles.");
+      }
 
       setOrderId(orderData.id);
       setStep("success");
       setCart([]);
     } catch (err: any) {
-      Alert.alert("Erreur", err.message || "Impossible de passer la commande. Réessayez.");
+      Alert.alert("Échec de la commande", err.message || "Une erreur est survenue lors du traitement.");
     } finally {
       setLoading(false);
     }
@@ -320,7 +341,7 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
             </Text>
             <View className="mb-5">
               {menuItems.map(item => {
-                const inCart = cart.find(c => c.menuItemId === item.id);
+                const inCart = cart.find(c => String(c.menuItemId) === String(item.id));
                 return (
                   <View
                     key={item.id}
@@ -383,7 +404,7 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
           </>
         )}
 
-        {/* ÉTAPE 2 : Formulaire complet de Livraison */}
+        {/* ÉTAPE 2 : Formulaire de Livraison */}
         {step === "checkout" && (
           <>
             {/* Récapitulatif Panier */}
@@ -508,7 +529,7 @@ export default function CommandeScreen({ user, route, navigation }: Props) {
                 onPress={handleFinalSubmit}
                 disabled={loading}
                 className="flex-1 py-4 rounded-2xl items-center justify-center flex-row gap-2"
-                style={{ backgroundColor: "#fcd116" }}
+                style={{ backgroundColor: loading ? "#999" : "#fcd116" }}
               >
                 {loading ? (
                   <ActivityIndicator color="#0a0f0d" />
