@@ -1,11 +1,12 @@
 import "../src/global.css";
-// ✅ 1. Importation du polyfill d'URL au TOUT DÉBUT pour corriger le "Network request failed"
+// ✅ Importation du polyfill d'URL au TOUT DÉBUT pour corriger le "Network request failed"
 import 'react-native-url-polyfill/auto'; 
 
 import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import * as SplashScreen from "expo-splash-screen";
+import { SafeAreaProvider } from "react-native-safe-area-context"; // 👈 1. Import requis
 
 SplashScreen.preventAutoHideAsync();
 
@@ -16,7 +17,8 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <>
+    // 👈 2. Wrap de toute l'application avec SafeAreaProvider
+    <SafeAreaProvider>
       <StatusBar style="light" backgroundColor="#0a0f0d" />
       <Stack screenOptions={{ headerShown: false, animation: "fade" }}>
         <Stack.Screen name="index" />
@@ -25,6 +27,6 @@ export default function RootLayout() {
         <Stack.Screen name="(gerant)" />
         <Stack.Screen name="(livreur)" />
       </Stack>
-    </>
+    </SafeAreaProvider>
   );
 }
