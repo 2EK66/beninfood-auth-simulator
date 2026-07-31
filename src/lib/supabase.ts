@@ -11,13 +11,50 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || "https://jafhpkbtxc
 const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...";
 
 /* ===========================
-   SECURE STORAGE
+   SECURE STORAGE ADAPTER (Robuste & Cross-Platform)
 =========================== */
 
 const ExpoSecureStoreAdapter = {
-  getItem: (key: string) => SecureStore.getItemAsync(key),
-  setItem: (key: string, value: string) => SecureStore.setItemAsync(key, value),
-  removeItem: (key: string) => SecureStore.deleteItemAsync(key),
+  getItem: async (key: string): Promise<string | null> => {
+    if (Platform.OS === "web") {
+      if (typeof localStorage !== "undefined") {
+        return localStorage.getItem(key);
+      }
+      return null;
+    }
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch (e) {
+      console.warn("Erreur lecture SecureStore :", e);
+      return null;
+    }
+  },
+  setItem: async (key: string, value: string): Promise<void> => {
+    if (Platform.OS === "web") {
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem(key, value);
+      }
+      return;
+    }
+    try {
+      await SecureStore.setItemAsync(key, value);
+    } catch (e) {
+      console.warn("Erreur écriture SecureStore :", e);
+    }
+  },
+  removeItem: async (key: string): Promise<void> => {
+    if (Platform.OS === "web") {
+      if (typeof localStorage !== "undefined") {
+        localStorage.removeItem(key);
+      }
+      return;
+    }
+    try {
+      await SecureStore.deleteItemAsync(key);
+    } catch (e) {
+      console.warn("Erreur suppression SecureStore :", e);
+    }
+  },
 };
 
 /* ===========================
