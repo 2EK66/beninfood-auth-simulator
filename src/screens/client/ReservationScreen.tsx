@@ -51,13 +51,10 @@ export default function ReservationScreen({ user }: Props) {
           .select("id, name, address")
           .order("name", { ascending: true });
 
-        if (!error && data) {
+        if (!error && data && data.length > 0) {
           setRestaurantsList(data);
-          if (data.length > 0) {
-            setSelectedRestaurant(data[0]);
-          } else {
-            setIsManualInput(true);
-          }
+          setSelectedRestaurant(data[0]); // Sélectionne par défaut le premier restaurant avec son ID
+          setIsManualInput(false);
         } else {
           setIsManualInput(true);
         }
@@ -74,18 +71,21 @@ export default function ReservationScreen({ user }: Props) {
   const handleReserve = async () => {
     setError("");
 
+    // Vérification rigoureuse du nom et de l'ID du restaurant
     const targetRestaurantName = isManualInput ? customRestaurantName.trim() : selectedRestaurant?.name || "";
     const targetRestaurantId = isManualInput ? null : selectedRestaurant?.id || null;
 
     if (!targetRestaurantName) return setError("Précisez le nom du restaurant.");
+    if (!isManualInput && !targetRestaurantId) return setError("Veuillez sélectionner un restaurant valide.");
     if (!date.trim()) return setError("Choisissez une date (ex: 15/07/2026).");
     if (!time) return setError("Choisissez une heure.");
 
     setLoading(true);
 
+    // Envoi garanti de restaurant_id à Supabase
     const { error: err } = await supabase.from("bf_reservations").insert({
       client_id: user.id,
-      restaurant_id: targetRestaurantId,
+      restaurant_id: targetRestaurantId, // 👈 Contient maintenant l'UUID du restaurant (non NULL)
       restaurant_name_free: targetRestaurantName,
       date,
       time,
@@ -96,7 +96,7 @@ export default function ReservationScreen({ user }: Props) {
 
     setLoading(false);
     if (err) {
-      console.error(err);
+      console.error("Erreur insertion réservation Supabase :", err);
       return setError("Erreur lors de la réservation. Réessayez.");
     }
     setSuccess(true);
@@ -192,7 +192,10 @@ export default function ReservationScreen({ user }: Props) {
                     })}
 
                     <TouchableOpacity
-                      onPress={() => setIsManualInput(true)}
+                      onPress={() => {
+                        setIsManualInput(true);
+                        setSelectedRestaurant(null);
+                      }}
                       className="px-3.5 py-2 rounded-xl border"
                       style={{
                         backgroundColor: isManualInput ? "#fcd116" : "rgba(255,255,255,0.05)",
