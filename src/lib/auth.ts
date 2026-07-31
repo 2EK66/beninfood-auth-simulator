@@ -15,25 +15,29 @@ interface AuthResult {
 }
 
 /**
- * Attend que le trigger SQL ait créé le profil.
+ * Attend que le trigger SQL ait créé le profil (SignUp uniquement).
  */
 async function waitForProfile(
   userId: string,
-  retries = 10,
-  delay = 500
+  retries = 5,
+  delay = 400
 ): Promise<BfProfile | null> {
   for (let i = 0; i < retries; i++) {
     const profile = await getBfProfile(userId);
 
     if (profile) {
-      return profile;
+      return profile as BfProfile;
     }
 
-    await new Promise(resolve => setTimeout(resolve, delay));
+    await new Promise((resolve) => setTimeout(resolve, delay));
   }
 
   return null;
 }
+
+/* ===========================
+   INSCRIPTION (SIGN UP)
+=========================== */
 
 export async function signUp({
   name,
@@ -45,18 +49,10 @@ export async function signUp({
     const cleanPhone = sanitizePhone(phone);
     const email = buildPhoneEmail(cleanPhone);
 
-    console.log("========== SIGNUP ==========");
-    console.log({
-      email,
-      phone: cleanPhone,
-      role,
-    });
-
     if (role === "Livreur") {
       return {
         success: false,
-        error:
-          "Les comptes Livreurs sont créés uniquement par l'administrateur BéninFood.",
+        error: "Les comptes Livreurs sont créés uniquement par l'administrateur BéninFood.",
       };
     }
 
@@ -72,15 +68,8 @@ export async function signUp({
       },
     });
 
-    console.log("========== RÉPONSE SUPABASE ==========");
-    console.log({
-      user: data.user?.id,
-      session: !!data.session,
-      error,
-    });
-
     if (error) {
-      console.error(error);
+      console.error("Erreur Auth SignUp:", error.message);
 
       if (error.message.toLowerCase().includes("already")) {
         return {
@@ -102,12 +91,10 @@ export async function signUp({
       };
     }
 
-    // Attendre que le trigger SQL crée bf_profiles
+    // Attendre la création du profil par le trigger SQL
     const profile = await waitForProfile(data.user.id);
 
     if (!profile) {
-      console.warn("Le profil n'a pas encore été créé.");
-
       return {
         success: true,
         user: {
@@ -133,6 +120,10 @@ export async function signUp({
   }
 }
 
+/* ===========================
+   CONNEXION (SIGN IN)
+=========================== */
+
 export async function signIn({
   phone,
   password,
@@ -144,19 +135,9 @@ export async function signIn({
     const cleanPhone = sanitizePhone(phone);
     const email = buildPhoneEmail(cleanPhone);
 
-    console.log("========== SIGNIN ==========");
-    console.log(email);
-
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
-    });
-
-    console.log("========== RÉPONSE SUPABASE ==========");
-    console.log({
-      user: data.user?.id,
-      session: !!data.session,
-      error,
     });
 
     if (error) {
@@ -183,19 +164,19 @@ export async function signIn({
       };
     }
 
-    const profile = await waitForProfile(data.user.id);
+    // Récupération directe sans boucle d'attente inutile
+    const profile = await getBfProfile(data.user.id);
 
     if (!profile) {
       return {
         success: false,
-        error:
-          "Votre profil est en cours de création. Réessayez dans quelques secondes.",
+        error: "Profil introuvable. Veuillez contacter le support.",
       };
     }
 
     return {
       success: true,
-      user: profile,
+      user: profile as BfProfile,
     };
   } catch (e: any) {
     console.error("Exception signIn :", e);
@@ -203,6 +184,24 @@ export async function signIn({
     return {
       success: false,
       error: e?.message ?? "Une erreur inattendue est survenue.",
+    };
+  }
+}
+
+/* ===========================
+   DÉCONNEXION (SIGN OUT)
+=========================== */
+
+export async function signOut(): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.auth.signOut();
+    if (error) throw error;
+    return { success: true };
+  } catch (e: any) {
+    console.error("Exception signOut :", e);
+    return {
+      success: false,
+      error: e?.message ?? "Erreur lors de la déconnexion.",
     };
   }
 }
