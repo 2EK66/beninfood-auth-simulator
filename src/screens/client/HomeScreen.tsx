@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity,
-  TextInput, Image, ScrollView, SafeAreaView,
-  StatusBar, RefreshControl, ActivityIndicator,
+  TextInput, Image, ScrollView,
+  StatusBar, RefreshControl, ActivityIndicator, Platform
 } from "react-native";
+import { useSafeAreaInsets, SafeAreaProvider } from "react-native-safe-area-context";
 import {
   Search, MapPin, Star, ShoppingBag, Bell,
   LogOut, Utensils, Plus, SlidersHorizontal,
@@ -26,6 +27,7 @@ const FALLBACK_RESTAURANTS: BfRestaurant[] = [
 ];
 
 export default function HomeScreen({ user, navigation }: Props) {
+  const insets = useSafeAreaInsets(); // Calcul précis des encoches et status bar
   const [restaurants, setRestaurants] = useState<BfRestaurant[]>(FALLBACK_RESTAURANTS);
   const [menuItems, setMenuItems] = useState<BfMenuItem[]>([]);
   const [search, setSearch] = useState("");
@@ -60,7 +62,6 @@ export default function HomeScreen({ user, navigation }: Props) {
     });
   };
 
-  // Handler de déconnexion sécurisé
   const handleSignOut = async () => {
     try {
       await signOutUser();
@@ -69,7 +70,6 @@ export default function HomeScreen({ user, navigation }: Props) {
     }
   };
 
-  // Handler de navigation vers la page d'un maquis / restaurant
   const handleSelectRestaurant = (restaurant: BfRestaurant) => {
     if (navigation) {
       navigation.navigate("RestaurantDetail", { restaurant });
@@ -93,29 +93,31 @@ export default function HomeScreen({ user, navigation }: Props) {
   };
 
   return (
-    <SafeAreaView className="flex-1 bg-bf-dark">
-      <StatusBar barStyle="light-content" backgroundColor="#001f13" />
+    <View className="flex-1 bg-bf-dark">
+      <StatusBar barStyle="light-content" backgroundColor="#001f13" translucent={false} />
 
-      {/* HEADER */}
-      <View className="px-5 pt-3 pb-4 bg-bf-green/30 border-b border-bf-border flex-row items-center justify-between">
-        
-        {/* Infos Utilisateur */}
-        <View className="flex-row items-center flex-1 mr-2">
-          <View className="w-9 h-9 rounded-full items-center justify-center mr-3" style={{ backgroundColor: "#fcd116" }}>
+      {/* HEADER CORRIGÉ */}
+      <View 
+        style={{ paddingTop: Math.max(insets.top, 12) }} 
+        className="px-5 pb-4 bg-bf-green/30 border-b border-bf-border flex-row items-center justify-between"
+      >
+        {/* Infos Utilisateur (Protections contre le débordement) */}
+        <View className="flex-row items-center flex-1 mr-3 min-w-0">
+          <View className="w-9 h-9 rounded-full items-center justify-center mr-3 flex-shrink-0" style={{ backgroundColor: "#fcd116" }}>
             <Text className="text-bf-dark font-black text-sm">
               {user?.name ? user.name.charAt(0).toUpperCase() : "U"}
             </Text>
           </View>
-          <View className="flex-1">
+          <View className="flex-1 min-w-0">
             <Text className="text-white/40 text-xs font-semibold">Akwaaba 👋</Text>
-            <Text className="text-white font-black text-sm" numberOfLines={1}>
+            <Text className="text-white font-black text-sm" numberOfLines={1} ellipsisMode="tail">
               {user?.name || "Utilisateur"}
             </Text>
           </View>
         </View>
 
-        {/* Action Buttons (Notification + Déconnexion) */}
-        <View className="flex-row items-center">
+        {/* Action Buttons (Fixés pour ne jamais sortir de l'écran) */}
+        <View className="flex-row items-center flex-shrink-0">
           <TouchableOpacity 
             activeOpacity={0.7}
             className="w-9 h-9 bg-white/5 border border-white/10 rounded-full items-center justify-center mr-2"
@@ -123,7 +125,6 @@ export default function HomeScreen({ user, navigation }: Props) {
             <Bell size={16} color="#fcd116" />
           </TouchableOpacity>
 
-          {/* Bouton de déconnexion corrigé */}
           <TouchableOpacity
             onPress={handleSignOut}
             activeOpacity={0.7}
@@ -132,7 +133,6 @@ export default function HomeScreen({ user, navigation }: Props) {
             <LogOut size={15} color="#ef4444" />
           </TouchableOpacity>
         </View>
-
       </View>
 
       <ScrollView
@@ -247,7 +247,6 @@ export default function HomeScreen({ user, navigation }: Props) {
             </View>
           ) : (
             filtered.map(r => (
-              /* Carte Maquis rendue cliquable avec TouchableOpacity */
               <TouchableOpacity 
                 key={r.id} 
                 activeOpacity={0.85}
@@ -261,7 +260,6 @@ export default function HomeScreen({ user, navigation }: Props) {
                     <Utensils size={32} color="#fcd116" />
                   </View>
                 )}
-                {/* Badge note */}
                 <View className="absolute top-3 right-3 flex-row items-center bg-black/60 px-2 py-1 rounded-lg">
                   <Star size={10} fill="#fcd116" color="#fcd116" style={{ marginRight: 4 }} />
                   <Text className="text-white font-black text-xs">{(r.rating || 4.5).toFixed(1)}</Text>
@@ -275,11 +273,11 @@ export default function HomeScreen({ user, navigation }: Props) {
                   </View>
                   <Text className="text-white/50 text-xs" numberOfLines={2}>{r.description}</Text>
                   <View className="flex-row items-center justify-between mt-2 pt-2 border-t border-white/5">
-                    <View className="flex-row items-center">
+                    <View className="flex-row items-center flex-1 mr-2">
                       <MapPin size={10} color="#ef4444" style={{ marginRight: 4 }} />
-                      <Text className="text-white/40 text-[10px] font-bold">{r.location}</Text>
+                      <Text className="text-white/40 text-[10px] font-bold" numberOfLines={1}>{r.location}</Text>
                     </View>
-                    <Text className="text-emerald-400 text-[9px] font-black">🛵 Livraison rapide</Text>
+                    <Text className="text-emerald-400 text-[9px] font-black flex-shrink-0">🛵 Livraison rapide</Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -290,7 +288,10 @@ export default function HomeScreen({ user, navigation }: Props) {
 
       {/* Barre de panier flottante */}
       {cartCount > 0 && (
-        <View className="absolute bottom-5 left-5 right-5 bg-bf-green border border-bf-gold/30 rounded-2xl px-4 py-3 flex-row items-center justify-between shadow-2xl">
+        <View 
+          style={{ bottom: Math.max(insets.bottom + 12, 20) }}
+          className="absolute left-5 right-5 bg-bf-green border border-bf-gold/30 rounded-2xl px-4 py-3 flex-row items-center justify-between shadow-2xl"
+        >
           <View className="flex-row items-center">
             <View className="w-8 h-8 rounded-xl items-center justify-center mr-3" style={{ backgroundColor: "rgba(252,209,22,0.15)" }}>
               <ShoppingBag size={14} color="#fcd116" />
@@ -311,6 +312,6 @@ export default function HomeScreen({ user, navigation }: Props) {
           </TouchableOpacity>
         </View>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
