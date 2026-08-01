@@ -2,9 +2,10 @@ import React, { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity,
   TextInput, Image, ScrollView,
-  StatusBar, RefreshControl, ActivityIndicator, Platform
+  StatusBar, RefreshControl, ActivityIndicator
 } from "react-native";
-import { useSafeAreaInsets, SafeAreaProvider } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router"; // 👈 Ajout du hook Expo Router
 import {
   Search, MapPin, Star, ShoppingBag, Bell,
   LogOut, Utensils, Plus, SlidersHorizontal,
@@ -14,7 +15,6 @@ import { BfProfile, BfRestaurant, BfMenuItem, CartItem } from "../../types";
 
 interface Props {
   user: BfProfile;
-  navigation?: any;
 }
 
 const CATEGORIES = ["Tous", "Maquis 🇧🇯", "Grillades", "Fast-Food", "Pâtisseries"];
@@ -26,8 +26,9 @@ const FALLBACK_RESTAURANTS: BfRestaurant[] = [
   { id: "4", owner_id: "", name: "Dany Fast-Food", location: "Cotonou, Zongo", phone: null, category: "Fast-Food", rating: 4.3, image_url: "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&auto=format&fit=crop&q=60", description: "Burgers avec frites d'igname locale.", created_at: "" },
 ];
 
-export default function HomeScreen({ user, navigation }: Props) {
-  const insets = useSafeAreaInsets(); // Calcul précis des encoches et status bar
+export default function HomeScreen({ user }: Props) {
+  const router = useRouter(); // 👈 Initialisation du routeur
+  const insets = useSafeAreaInsets();
   const [restaurants, setRestaurants] = useState<BfRestaurant[]>(FALLBACK_RESTAURANTS);
   const [menuItems, setMenuItems] = useState<BfMenuItem[]>([]);
   const [search, setSearch] = useState("");
@@ -70,10 +71,23 @@ export default function HomeScreen({ user, navigation }: Props) {
     }
   };
 
+  // Redirection vers le détail d'un restaurant avec Expo Router
   const handleSelectRestaurant = (restaurant: BfRestaurant) => {
-    if (navigation) {
-      navigation.navigate("RestaurantDetail", { restaurant });
-    }
+    router.push({
+      pathname: `/restaurant/${restaurant.id}`, // Adaptez ce chemin selon le nom de votre fichier dans app/
+      params: { restaurant: JSON.stringify(restaurant) },
+    });
+  };
+
+  // Redirection vers la page de commande avec Expo Router
+  const handleGoToCommande = () => {
+    router.push({
+      pathname: "/commande", // Adaptez ce chemin selon le nom de votre écran dans app/
+      params: { 
+        initialCart: JSON.stringify(cart), 
+        initialStep: "checkout" 
+      },
+    });
   };
 
   const cartTotal = cart.reduce((s, c) => s + c.price * c.quantity, 0);
@@ -86,22 +100,15 @@ export default function HomeScreen({ user, navigation }: Props) {
     return matchSearch && matchCat;
   });
 
-  const handleGoToCommande = () => {
-    if (navigation) {
-      navigation.navigate("Commande", { initialCart: cart, initialStep: "checkout" });
-    }
-  };
-
   return (
     <View className="flex-1 bg-bf-dark">
       <StatusBar barStyle="light-content" backgroundColor="#001f13" translucent={false} />
 
-      {/* HEADER CORRIGÉ */}
+      {/* HEADER */}
       <View 
         style={{ paddingTop: Math.max(insets.top, 12) }} 
         className="px-5 pb-4 bg-bf-green/30 border-b border-bf-border flex-row items-center justify-between"
       >
-        {/* Infos Utilisateur (Protections contre le débordement) */}
         <View className="flex-row items-center flex-1 mr-3 min-w-0">
           <View className="w-9 h-9 rounded-full items-center justify-center mr-3 flex-shrink-0" style={{ backgroundColor: "#fcd116" }}>
             <Text className="text-bf-dark font-black text-sm">
@@ -116,7 +123,6 @@ export default function HomeScreen({ user, navigation }: Props) {
           </View>
         </View>
 
-        {/* Action Buttons (Fixés pour ne jamais sortir de l'écran) */}
         <View className="flex-row items-center flex-shrink-0">
           <TouchableOpacity 
             activeOpacity={0.7}
