@@ -441,11 +441,4 @@ export default function GerantReservationsScreen({ user }: Props) {
     </SafeAreaView>
   );
 }
-```eof
-
-### Résumé de la mise à jour :
-
-1. **Suppression de `user.restaurant_id`** : Le composant ne fait plus du tout appel à `user.restaurant_id`.
-2. **Recherche dynamique dans `bf_restaurants`** : L'ID du restaurant est récupéré à l'initialisation via `owner_id = user.id`.
-3. **Canal Realtime sécurisé** : L'abonnement en temps réel utilise le `restaurant_id` nouvellement résolu.
-4. **Gestion du cas d'erreur / Compte sans restaurant** : Un écran explicite avec message d'alerte s'affiche si aucun restaurant n'appartient au profil gérant connecté.
+``
