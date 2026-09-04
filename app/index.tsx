@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from "expo-secure-store";
 import { useAuth } from "../src/hooks/useAuth";
 
 const CLIENT_CHOICE_KEY = "bf_has_chosen_client";
@@ -15,7 +15,7 @@ export default function Index() {
 
     const decide = async () => {
       if (!user) {
-        const hasChosenClient = await AsyncStorage.getItem(CLIENT_CHOICE_KEY);
+        const hasChosenClient = await SecureStore.getItemAsync(CLIENT_CHOICE_KEY);
 
         if (hasChosenClient === "true") {
           router.replace("/(client)/home");
