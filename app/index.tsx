@@ -1,7 +1,10 @@
 import { useEffect } from "react";
 import { View, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../src/hooks/useAuth";
+
+const CLIENT_CHOICE_KEY = "bf_has_chosen_client";
 
 export default function Index() {
   const { user, loading } = useAuth();
@@ -10,15 +13,28 @@ export default function Index() {
   useEffect(() => {
     if (loading) return;
 
-    if (!user) {
-      router.replace("/(auth)/login");
-    } else if (user.role === "Gérant") {
-      router.replace("/(gerant)/home");
-    } else if (user.role === "Livreur") {
-      router.replace("/(livreur)/courses");
-    } else {
-      router.replace("/(client)/home");
-    }
+    const decide = async () => {
+      if (!user) {
+        const hasChosenClient = await AsyncStorage.getItem(CLIENT_CHOICE_KEY);
+
+        if (hasChosenClient === "true") {
+          router.replace("/(client)/home");
+        } else {
+          router.replace("/(auth)/welcome");
+        }
+        return;
+      }
+
+      if (user.role === "Gérant") {
+        router.replace("/(gerant)/home");
+      } else if (user.role === "Livreur") {
+        router.replace("/(livreur)/courses");
+      } else {
+        router.replace("/(client)/home");
+      }
+    };
+
+    decide();
   }, [user, loading]);
 
   return (
