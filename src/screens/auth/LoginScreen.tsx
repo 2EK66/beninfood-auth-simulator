@@ -18,6 +18,7 @@ import {
   EyeOff,
   ArrowRight,
   ShoppingBag,
+  Utensils,
 } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { signIn } from "../../lib/auth";
@@ -29,11 +30,19 @@ interface Props {
 export default function LoginScreen({ onToggle }: Props) {
   const router = useRouter();
 
+  // Bascule entre l'écran "invité" (Client) et le formulaire pro (Gérant/Livreur)
+  const [showProAuth, setShowProAuth] = useState(false);
+
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Le client commande directement, sans créer de compte
+  const handleGuestOrder = () => {
+    router.replace("/(client)/home");
+  };
 
   const handleLogin = async () => {
     try {
@@ -118,120 +127,173 @@ export default function LoginScreen({ onToggle }: Props) {
             </Text>
 
             <Text className="text-white/40 text-xs font-semibold uppercase tracking-widest mt-1">
-              Savourez le meilleur du Bénin
+              {showProAuth
+                ? "Espace professionnel"
+                : "Savourez le meilleur du Bénin"}
             </Text>
           </View>
 
-          {/* Form Card */}
-          <View className="bg-bf-card border border-bf-border rounded-3xl p-6">
-            <Text className="text-lg font-black text-white mb-6">
-              Se connecter
-            </Text>
-
-            {error ? (
-              <View className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3 mb-4">
-                <Text className="text-red-300 text-xs font-semibold">
-                  {error}
-                </Text>
-              </View>
-            ) : null}
-
-            {/* Field: Phone */}
-            <View className="mb-4">
-              <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
-                Téléphone
+          {!showProAuth ? (
+            /* ================= ÉCRAN INVITÉ (CLIENT) ================= */
+            <View className="bg-bf-card border border-bf-border rounded-3xl p-6">
+              <Text className="text-lg font-black text-white mb-2">
+                Bienvenue 👋
+              </Text>
+              <Text className="text-white/50 text-xs leading-relaxed mb-6">
+                Aucun compte n'est nécessaire pour commander. Vos coordonnées
+                de livraison vous seront simplement demandées au moment de
+                valider votre panier.
               </Text>
 
-              <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
-                <Phone size={16} color="#94A3B8" />
-
-                <Text className="text-white/40 font-black text-sm mx-2">
-                  +229
+              <TouchableOpacity
+                onPress={handleGuestOrder}
+                activeOpacity={0.85}
+                className="w-full py-4 rounded-2xl flex-row items-center justify-center bg-bf-yellow"
+              >
+                <ShoppingBag size={16} color="#001f13" />
+                <Text className="text-bf-dark font-black text-base ml-2">
+                  Commander maintenant
                 </Text>
+              </TouchableOpacity>
 
-                <View className="w-px h-4 bg-white/20 mr-2" />
-
-                <TextInput
-                  placeholder="61 00 00 00"
-                  placeholderTextColor="#94A3B8"
-                  keyboardType="phone-pad"
-                  value={phone}
-                  onChangeText={setPhone}
-                  className="flex-1 text-white text-sm font-semibold"
-                  autoComplete="tel"
-                />
+              <View className="flex-row items-center my-5">
+                <View className="flex-1 h-px bg-white/10" />
+                <Text className="text-white/30 text-[10px] font-bold uppercase tracking-widest mx-3">
+                  Ou
+                </Text>
+                <View className="flex-1 h-px bg-white/10" />
               </View>
-            </View>
 
-            {/* Field: Password */}
-            <View className="mb-6">
-              <View className="flex-row justify-between mb-2">
-                <Text className="text-white/50 text-xs font-bold uppercase tracking-wider">
-                  Mot de passe
+              <TouchableOpacity
+                onPress={() => setShowProAuth(true)}
+                activeOpacity={0.85}
+                className="w-full py-3.5 rounded-2xl border border-white/15 bg-white/5 flex-row items-center justify-center"
+              >
+                <Utensils size={15} color="#FFFFFF" />
+                <Text className="text-white/80 font-bold text-sm ml-2">
+                  Espace Gérant / Livreur
                 </Text>
-
-                <TouchableOpacity>
-                  <Text className="text-bf-yellow text-xs font-bold">
-                    Oublié ?
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* ================= FORMULAIRE GÉRANT / LIVREUR ================= */
+            <View className="bg-bf-card border border-bf-border rounded-3xl p-6">
+              <View className="flex-row items-center justify-between mb-6">
+                <Text className="text-lg font-black text-white">
+                  Se connecter
+                </Text>
+                <TouchableOpacity onPress={() => setShowProAuth(false)}>
+                  <Text className="text-white/40 text-xs font-bold">
+                    ← Retour
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
-                <Lock size={16} color="#94A3B8" />
+              {error ? (
+                <View className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3 mb-4">
+                  <Text className="text-red-300 text-xs font-semibold">
+                    {error}
+                  </Text>
+                </View>
+              ) : null}
 
-                <TextInput
-                  placeholder="••••••••"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry={!showPw}
-                  value={password}
-                  onChangeText={setPassword}
-                  className="flex-1 text-white text-sm font-semibold mx-3"
-                  autoComplete="password"
-                />
+              {/* Field: Phone */}
+              <View className="mb-4">
+                <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
+                  Téléphone
+                </Text>
 
-                <TouchableOpacity onPress={() => setShowPw(!showPw)}>
-                  {showPw ? (
-                    <EyeOff size={16} color="#94A3B8" />
-                  ) : (
-                    <Eye size={16} color="#94A3B8" />
-                  )}
+                <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+                  <Phone size={16} color="#94A3B8" />
+
+                  <Text className="text-white/40 font-black text-sm mx-2">
+                    +229
+                  </Text>
+
+                  <View className="w-px h-4 bg-white/20 mr-2" />
+
+                  <TextInput
+                    placeholder="61 00 00 00"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="phone-pad"
+                    value={phone}
+                    onChangeText={setPhone}
+                    className="flex-1 text-white text-sm font-semibold"
+                    autoComplete="tel"
+                  />
+                </View>
+              </View>
+
+              {/* Field: Password */}
+              <View className="mb-6">
+                <View className="flex-row justify-between mb-2">
+                  <Text className="text-white/50 text-xs font-bold uppercase tracking-wider">
+                    Mot de passe
+                  </Text>
+
+                  <TouchableOpacity>
+                    <Text className="text-bf-yellow text-xs font-bold">
+                      Oublié ?
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View className="flex-row items-center bg-white/5 border border-white/10 rounded-2xl px-4 py-3">
+                  <Lock size={16} color="#94A3B8" />
+
+                  <TextInput
+                    placeholder="••••••••"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!showPw}
+                    value={password}
+                    onChangeText={setPassword}
+                    className="flex-1 text-white text-sm font-semibold mx-3"
+                    autoComplete="password"
+                  />
+
+                  <TouchableOpacity onPress={() => setShowPw(!showPw)}>
+                    {showPw ? (
+                      <EyeOff size={16} color="#94A3B8" />
+                    ) : (
+                      <Eye size={16} color="#94A3B8" />
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                onPress={handleLogin}
+                disabled={loading}
+                activeOpacity={0.85}
+                className="w-full py-4 rounded-2xl flex-row items-center justify-center bg-bf-yellow"
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color="#001f13" />
+                ) : (
+                  <>
+                    <Text className="text-bf-dark font-black text-base mr-2">
+                      Se connecter
+                    </Text>
+                    <ArrowRight size={16} color="#001f13" />
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Toggle Screen (uniquement pour les pros) */}
+              <View className="flex-row justify-center mt-6">
+                <Text className="text-white/50 text-sm">
+                  Pas encore de compte Gérant ?
+                </Text>
+
+                <TouchableOpacity onPress={onToggle}>
+                  <Text className="text-bf-yellow text-sm font-black ml-1">
+                    S'inscrire
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
-
-            {/* Submit Button */}
-            <TouchableOpacity
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.85}
-              className="w-full py-4 rounded-2xl flex-row items-center justify-center bg-bf-yellow"
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color="#001f13" />
-              ) : (
-                <>
-                  <Text className="text-bf-dark font-black text-base mr-2">
-                    Se connecter
-                  </Text>
-                  <ArrowRight size={16} color="#001f13" />
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Toggle Screen */}
-          <View className="flex-row justify-center mt-6">
-            <Text className="text-white/50 text-sm">
-              Pas encore de compte ?
-            </Text>
-
-            <TouchableOpacity onPress={onToggle}>
-              <Text className="text-bf-yellow text-sm font-black ml-1">
-                S'inscrire
-              </Text>
-            </TouchableOpacity>
-          </View>
+          )}
 
           {/* Benin Flag Bar */}
           <View className="flex-row mx-auto w-20 h-1 rounded-full overflow-hidden mt-8">
