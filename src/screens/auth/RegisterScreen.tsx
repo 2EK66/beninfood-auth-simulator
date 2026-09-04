@@ -7,7 +7,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context"; 
 import {
   Phone, Lock, User, ArrowRight, ShoppingBag,
-  Utensils, Check, Bike, Eye, EyeOff, CheckCircle2, LogIn
+  Utensils, Bike, Eye, EyeOff, CheckCircle2, LogIn
 } from "lucide-react-native";
 import { signUp } from "../../lib/auth";
 import { UserRole } from "../../types";
@@ -16,31 +16,17 @@ interface Props {
   onToggle: () => void;
 }
 
-const ROLES: { id: UserRole; label: string; desc: string; icon: React.ReactNode; color: string }[] = [
-  {
-    id: "Client",
-    label: "Client gourmand",
-    desc: "Commander Atassi, Amiwo, Kpessé…",
-    icon: <ShoppingBag size={18} color="#fcd116" />,
-    color: "#fcd116",
-  },
-  {
-    id: "Gérant",
-    label: "Gérant de Maquis",
-    desc: "Publier votre menu et gérer les commandes",
-    icon: <Utensils size={18} color="#34d399" />,
-    color: "#34d399",
-  },
-];
+// Un seul rôle s'inscrit lui-même désormais : le Gérant.
+// Les Clients commandent en invité, les Livreurs sont créés par l'administrateur.
+const FIXED_ROLE: UserRole = "Gérant";
 
 export default function RegisterScreen({ onToggle }: Props) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState(""); // ✅ Champ de confirmation
-  const [role, setRole] = useState<UserRole>("Client");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
-  const [showConfirmPw, setShowConfirmPw] = useState(false); // ✅ Visibilité masquer/afficher
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
@@ -52,10 +38,10 @@ export default function RegisterScreen({ onToggle }: Props) {
     if (!name.trim()) return setError("Le nom complet est requis.");
     if (!phone.trim()) return setError("Le numéro de téléphone est requis.");
     if (password.length < 6) return setError("Mot de passe : minimum 6 caractères.");
-    if (password !== confirmPassword) return setError("Les mots de passe ne correspondent pas."); // ✅ Validation
+    if (password !== confirmPassword) return setError("Les mots de passe ne correspondent pas.");
 
     setLoading(true);
-    const result = await signUp({ name, phone, password, role });
+    const result = await signUp({ name, phone, password, role: FIXED_ROLE });
     setLoading(false);
 
     if (result.success) {
@@ -94,7 +80,10 @@ export default function RegisterScreen({ onToggle }: Props) {
           </View>
 
           <View className="bg-bf-card border border-bf-border rounded-3xl p-6">
-            <Text className="text-lg font-black text-white mb-5">Créer un compte</Text>
+            <Text className="text-lg font-black text-white mb-1">Créer un compte Gérant</Text>
+            <Text className="text-white/40 text-xs font-medium mb-5">
+              Publiez votre menu et gérez vos commandes sur BéninFood.
+            </Text>
 
             {/* Message de succès */}
             {success && (
@@ -118,48 +107,45 @@ export default function RegisterScreen({ onToggle }: Props) {
               </View>
             ) : null}
 
-            {/* Sélecteur de rôle */}
+            {/* Badge de rôle fixe (plus de sélecteur, il n'y a qu'un seul cas d'inscription) */}
             <View className="mb-5">
               <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-3">
                 Votre rôle sur BéninFood
               </Text>
-              <View className="gap-y-2">
-                {ROLES.map(r => (
-                  <TouchableOpacity
-                    key={r.id}
-                    onPress={() => setRole(r.id)}
-                    disabled={success}
-                    activeOpacity={0.8}
-                    className="flex-row items-center p-4 rounded-2xl border-2"
-                    style={{
-                      borderColor: role === r.id ? r.color : "rgba(255,255,255,0.1)",
-                      backgroundColor: role === r.id ? "rgba(255,255,255,0.05)" : "transparent",
-                    }}
-                  >
-                    <View
-                      className="w-10 h-10 rounded-xl items-center justify-center mr-3"
-                      style={{ backgroundColor: role === r.id ? `${r.color}20` : "rgba(255,255,255,0.05)" }}
-                    >
-                      {r.icon}
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-white font-bold text-sm">{r.label}</Text>
-                      <Text className="text-white/40 text-xs mt-0.5">{r.desc}</Text>
-                    </View>
-                    {role === r.id && (
-                      <View
-                        className="w-5 h-5 rounded-full items-center justify-center"
-                        style={{ backgroundColor: r.color }}
-                      >
-                        <Check size={11} color="#001f13" />
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ))}
+
+              <View
+                className="flex-row items-center p-4 rounded-2xl border-2"
+                style={{
+                  borderColor: "#34d399",
+                  backgroundColor: "rgba(255,255,255,0.05)",
+                }}
+              >
+                <View
+                  className="w-10 h-10 rounded-xl items-center justify-center mr-3"
+                  style={{ backgroundColor: "#34d39920" }}
+                >
+                  <Utensils size={18} color="#34d399" />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-white font-bold text-sm">Gérant de Maquis</Text>
+                  <Text className="text-white/40 text-xs mt-0.5">
+                    Publier votre menu et gérer les commandes
+                  </Text>
+                </View>
+                <CheckCircle2 size={18} color="#34d399" />
+              </View>
+
+              {/* Note client */}
+              <View className="flex-row items-start mt-3 p-3 bg-bf-yellow/10 border border-bf-yellow/20 rounded-xl gap-x-2">
+                <ShoppingBag size={14} color="#fcd116" style={{ marginTop: 1 }} />
+                <Text className="text-yellow-100 text-xs font-medium flex-1 leading-relaxed">
+                  <Text className="font-bold">Client :</Text> aucune inscription
+                  nécessaire, vous pouvez commander directement en mode invité.
+                </Text>
               </View>
 
               {/* Note livreur */}
-              <View className="flex-row items-start mt-3 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl gap-x-2">
+              <View className="flex-row items-start mt-2 p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl gap-x-2">
                 <Bike size={14} color="#60a5fa" style={{ marginTop: 1 }} />
                 <Text className="text-blue-200 text-xs font-medium flex-1 leading-relaxed">
                   <Text className="font-bold">Livreurs :</Text> les comptes sont créés
@@ -234,7 +220,7 @@ export default function RegisterScreen({ onToggle }: Props) {
               </View>
             </View>
 
-            {/* ✅ Confirmer le mot de passe */}
+            {/* Confirmer le mot de passe */}
             <View className="mb-6">
               <Text className="text-white/50 text-xs font-bold uppercase tracking-wider mb-2">
                 Confirmer le mot de passe
